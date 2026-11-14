@@ -103,7 +103,8 @@ const ITEMS = {
     {id:'phantom',name:'Drible Fantasma',price:1200,description:'Com a bola dominada, corta para o lado e tenta escapar de um bote.'},
     {id:'vision',name:'Visão de Campo',price:1000,description:'Por 20s, revela padrões táticos, dá velocidade e libera passes teleguiados.'},
     {id:'curve',name:'Curva Impossível',price:1200,description:'Permite mirar um chute ou passe que curva suavemente durante a trajetória.'},
-    {id:'twoOne',name:'Dois pra Um',price:1500,description:'Combina um passe curto com uma devolução de primeira e uma arrancada para receber.'},
+    {id:'twoOne',name:'Toque e Passa',price:1500,description:'Combina um passe curto com uma devolução de primeira e uma arrancada para receber.'},
+    {id:'snakeTackle',name:'Bote da Serpente',price:1500,description:'Mire um bote em faixa curta para tentar desarmar um rival ou desviar a bola.'},
     {id:'control',name:'Domínio Perfeito',price:800,description:'Amortece a bola no próximo contato.'},
     {id:'eagle',name:'Salto de Águia',price:1000,description:'Aumenta o alcance do próximo chute.'},
     {id:'sniper',name:'Instinto de Artilheiro',price:1500,description:'Bônus leve ao finalizar perto do gol.'},
@@ -177,6 +178,10 @@ const CONFIG = {
     kickReachMargin: 9,       // Distância de alcance para acionar o chute
     kickCooldown: 0.28        // Tempo mínimo entre chutes (segundos)
   }
+};
+const PITCH_LAYOUTS = {
+  match: {left:120,right:880,top:65,bottom:535,goalHeight:130},
+  '2v2': {left:72,right:928,top:32,bottom:568,goalHeight:154}
 };
 
 /* ==========================================================================
@@ -397,6 +402,12 @@ class Player {
     this.phantomDribbleTimer = 0;
     this.phantomDirectionX = this.facingX;
     this.phantomDirectionY = this.facingY;
+    this.visionRunTimer = 0;
+    this.visionRunDirectionX = 0;
+    this.visionRunDirectionY = 0;
+    this.tackleStaggerTimer = 0;
+    this.aiPowerThink = 6 + Math.random() * 3;
+    this.aiPowerId = null;
 
     // Controle de Chute
     this.kickCooldownTimer = 0;
@@ -420,6 +431,8 @@ class Player {
     this.ghostDodgeUsed = false;
     this.ghostDodgeSuccess = false;
     this.phantomDribbleTimer = 0;
+    this.visionRunTimer = 0;
+    this.tackleStaggerTimer = 0;
   }
 
   update(dt) {
@@ -433,6 +446,8 @@ class Player {
     }
     if (this.dashTimer > 0) this.dashTimer = Math.max(0, this.dashTimer - dt);
     if (this.twoOneRunTimer > 0) this.twoOneRunTimer = Math.max(0,this.twoOneRunTimer-dt);
+    if (this.visionRunTimer > 0) this.visionRunTimer = Math.max(0,this.visionRunTimer-dt);
+    if (this.tackleStaggerTimer > 0) this.tackleStaggerTimer = Math.max(0,this.tackleStaggerTimer-dt);
     if (this.ghostCutTimer > 0) this.ghostCutTimer = Math.max(0, this.ghostCutTimer - dt);
     if (this.phantomDribbleTimer > 0) this.phantomDribbleTimer = Math.max(0,this.phantomDribbleTimer-dt);
     if (this.ghostTrailTimer > 0) this.ghostTrailTimer -= dt;
@@ -474,8 +489,14 @@ class Player {
     if (dist <= kickReach) {
       this.kickRingTimer = 0.15;
       this.kickCooldownTimer = CONFIG.physics.kickCooldown;
+      if(isPass){
+        ball.passTarget=guidedTarget;ball.passSource=this;ball.passExpiry=2.8;ball.passWasVision=this===player1&&gameMode==='2v2'&&this.powerEffect==='vision';
+        if(this.powerEffect==='vision'){ball.visionPassAssistTimer=1.5;ball.visionPassAssistEnabled=Math.random()<.78;}
+      }
+      else {ball.passTarget=null;ball.passSource=null;ball.passExpiry=0;ball.passWasVision=false;if(gameMode==='2v2'&&twoVtwoStats)twoVtwoStats.passStreak=0;}
       this.ignoreBallCollisionFrames = 4; // Desativa colisão elástica reversa temporariamente
       ball.dribbleLockTimer=0.42;
+      ball.dribbleLockOwner=this;
 
       // Vetor normalizado do centro do jogador para a bola
       let nx = dist > 0.0001 ? dx / dist : (this.isHuman ? 1 : -1);
@@ -674,6 +695,11 @@ class Ball {
     this.visionPassAssistEnabled = false;
     this.curveTimer=0;this.curveSide=1;this.curveRate=0;this.curveTrail=[];
     this.dribbleLockTimer=0;
+    this.dribbleLockOwner=null;
+    this.passTarget=null;
+    this.passSource=null;
+    this.passExpiry=0;
+    this.passWasVision=false;
   }
 
   reset(x, y) {
@@ -687,10 +713,15 @@ class Ball {
     this.visionPassAssistEnabled = false;
     this.curveTimer=0;this.curveTrail=[];
     this.dribbleLockTimer=0;
+    this.dribbleLockOwner=null;
+    this.passTarget=null;
+    this.passSource=null;
+    this.passExpiry=0;
+    this.passWasVision=false;
   }
 
   update() {
-    if(this.dribbleLockTimer>0)this.dribbleLockTimer=Math.max(0,this.dribbleLockTimer-1/60);
+    if(this.dribbleLockTimer>0){this.dribbleLockTimer=Math.max(0,this.dribbleLockTimer-1/60);if(this.dribbleLockTimer===0)this.dribbleLockOwner=null;}
     if(this.curveTimer>0){
       this.curveTimer=Math.max(0,this.curveTimer-1/60);
       const angle=this.curveSide*this.curveRate/60,speed=Math.hypot(this.vx,this.vy),cos=Math.cos(angle),sin=Math.sin(angle),oldVx=this.vx,oldVy=this.vy;
@@ -877,6 +908,125 @@ class GoalPost {
 const particles = [];
 const lightningTrails = [];
 const phantomShadows = [];
+const snakeTackles = [];
+const snakeAtlasFrames = [
+  {x:58,y:615,w:220,h:238},
+  {x:365,y:595,w:330,h:280},
+  {x:715,y:595,w:430,h:285},
+  {x:1135,y:585,w:378,h:298}
+];
+let snakeSpriteCanvas=null;
+
+// Reutiliza a folha de animação existente e remove o gramado para não cobrir o campo.
+assets.loadSprite('snakeAiku','img/cobra do aiku.png').then(image=>{
+  const spriteCanvas=document.createElement('canvas');
+  spriteCanvas.width=image.naturalWidth;spriteCanvas.height=image.naturalHeight;
+  const spriteCtx=spriteCanvas.getContext('2d',{willReadFrequently:true});
+  spriteCtx.drawImage(image,0,0);
+  const pixels=spriteCtx.getImageData(0,0,spriteCanvas.width,spriteCanvas.height),data=pixels.data;
+  for(let i=0;i<data.length;i+=4){
+    const r=data[i],g=data[i+1],b=data[i+2],max=Math.max(r,g,b),min=Math.min(r,g,b);
+    const grass=g-r>9&&g-b>7&&g>r*1.05;
+    const fieldMark=max-min<18&&max>78;
+    if(grass||fieldMark)data[i+3]=0;
+  }
+  spriteCtx.putImageData(pixels,0,0);
+  snakeSpriteCanvas=spriteCanvas;
+}).catch(()=>{});
+
+function getSnakeTackleEndpoint(tackle){
+  const actor=tackle.owner,p=CONFIG.pitch,dx=tackle.dirX,dy=tackle.dirY;
+  let distance=tackle.range;
+  if(dx>0)distance=Math.min(distance,(p.right-actor.radius-6-actor.x)/dx);
+  else if(dx<0)distance=Math.min(distance,(p.left+actor.radius+6-actor.x)/dx);
+  if(dy>0)distance=Math.min(distance,(p.bottom-actor.radius-6-actor.y)/dy);
+  else if(dy<0)distance=Math.min(distance,(p.top+actor.radius+6-actor.y)/dy);
+  distance=Math.max(0,distance);
+  for(const post of posts){
+    const along=(post.x-actor.x)*dx+(post.y-actor.y)*dy;
+    const side=Math.abs((post.x-actor.x)*(-dy)+(post.y-actor.y)*dx);
+    if(along>0&&along<distance&&side<post.radius+14)distance=Math.max(0,along-post.radius-12);
+  }
+  return {x:actor.x+dx*distance,y:actor.y+dy*distance,distance};
+}
+
+function getSnakeLaneOffset(tackle,x,y){
+  const dx=x-tackle.owner.x,dy=y-tackle.owner.y;
+  return {along:dx*tackle.dirX+dy*tackle.dirY,side:Math.abs(dx*(-tackle.dirY)+dy*tackle.dirX)};
+}
+
+function getSnakeOpponents(actor){
+  if(actor===player1||actor===homeMate)return gameMode==='2v2'?[player2,awayMate]:[player2];
+  return gameMode==='2v2'?[player1,homeMate]:[player1];
+}
+
+function addSnakeFadeParticles(x,y){
+  for(let i=0;i<10;i++){
+    const angle=Math.random()*Math.PI*2,speed=.7+Math.random()*2;
+    particles.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,life:.55,decay:.055+Math.random()*.035,color:i%2?'#c4b5fd':'#8b5cf6'});
+  }
+}
+
+function attemptSnakeTackle(tackle){
+  if(tackle.resolved)return;
+  const actor=tackle.owner,end=getSnakeTackleEndpoint(tackle);
+  if(end.distance<12)return;
+  const carrier=findControlledActor(getSnakeOpponents(actor));
+  const carrierLane=carrier?getSnakeLaneOffset(tackle,carrier.x,carrier.y):null;
+  const carrierContact=!!carrier&&carrierLane.along>=8&&carrierLane.along<=end.distance+carrier.radius&&carrierLane.side<=carrier.radius+9;
+  const ballLanes=[getSnakeLaneOffset(tackle,ball.x,ball.y),getSnakeLaneOffset(tackle,ball.x+ball.vx*.18,ball.y+ball.vy*.18)];
+  const ballContact=ballLanes.some(lane=>lane.along>=0&&lane.along<=end.distance&&lane.side<=ball.radius+11);
+  if(!carrierContact&&!ballContact)return;
+
+  tackle.resolved=true;
+  const contactGap=carrierContact?carrierLane.side:Math.min(...ballLanes.filter(lane=>lane.along>=0&&lane.along<=end.distance).map(lane=>lane.side));
+  const width=carrierContact?carrier.radius+9:ball.radius+11;
+  const accuracy=Math.max(0,1-contactGap/width);
+  const chance=(carrierContact ? .43 : .48)+accuracy*.22;
+  if(Math.random()>chance){tackle.outcome='miss';return;}
+
+  tackle.hit=true;
+  if(carrierContact){
+    const side=Math.sign((ball.x-actor.x)*(-tackle.dirY)+(ball.y-actor.y)*tackle.dirX)||1;
+    const impulseX=tackle.dirX*.58-tackle.dirY*side*.82,impulseY=tackle.dirY*.58+tackle.dirX*side*.82;
+    const length=Math.hypot(impulseX,impulseY)||1;
+    ball.vx=impulseX/length*8.3;ball.vy=impulseY/length*8.3;
+    carrier.tackleStaggerTimer=.22;
+    tackle.outcome='disarm';
+  } else {
+    const along=ball.vx*tackle.dirX+ball.vy*tackle.dirY;
+    const side=Math.sign(ball.vx*(-tackle.dirY)+ball.vy*tackle.dirX)||1;
+    ball.vx-=tackle.dirX*along*1.45;ball.vy-=tackle.dirY*along*1.45;
+    ball.vx+=-tackle.dirY*side*1.8;ball.vy+=tackle.dirX*side*1.8;
+    tackle.outcome='deflect';
+  }
+  ball.dribbleLockTimer=0;ball.dribbleLockOwner=null;ball.passTarget=null;ball.passSource=null;ball.passExpiry=0;ball.passWasVision=false;
+  ball.curveTimer=0;ball.curveTrail=[];
+  addImpactSpark(ball.x,ball.y);addSnakeFadeParticles(ball.x,ball.y);
+  if(actor.isHuman)showPowerFeedback(tackle.outcome==='disarm'?'Bote certeiro: bola desarmada':'Bola desviada pelo Bote da Serpente',true,false);
+}
+
+function updateSnakeTackles(dt,moveX=0,moveY=0){
+  for(let i=snakeTackles.length-1;i>=0;i--){
+    const tackle=snakeTackles[i];
+    if(tackle.phase==='warning'&&tackle.owner.isHuman&&(moveX||moveY)){
+      const length=Math.hypot(moveX,moveY)||1;tackle.dirX=moveX/length;tackle.dirY=moveY/length;
+    }
+    tackle.timer=Math.max(0,tackle.timer-dt);
+    if(tackle.timer>0)continue;
+    if(tackle.phase==='warning'){tackle.phase='expand';tackle.timer=tackle.phaseDuration=.25;}
+    else if(tackle.phase==='expand'){tackle.phase='strike';tackle.timer=tackle.phaseDuration=.18;}
+    else if(tackle.phase==='strike'){
+      if(!tackle.resolved)attemptSnakeTackle(tackle);
+      if(tackle.timer<=0){
+        tackle.owner.powerCooldown=POWER_COOLDOWNS.snakeTackle;
+        if(!tackle.hit&&tackle.owner.isHuman)showPowerFeedback(tackle.outcome==='miss'?'O bote não desarmou o adversário':'O bote passou longe da bola',true,false);
+        const end=getSnakeTackleEndpoint(tackle);addSnakeFadeParticles(end.x,end.y);
+        tackle.phase='fade';tackle.timer=tackle.phaseDuration=.28;
+      }
+    } else if(tackle.phase==='fade')snakeTackles.splice(i,1);
+  }
+}
 
 function addPhantomShadow(player) {
   phantomShadows.push({x:player.x,y:player.y,radius:player.radius,color:player.color,number:player.number,life:0.28,maxLife:0.28});
@@ -1053,37 +1203,33 @@ function resolveCircleSegment(circle, x1, y1, x2, y2, restitution) {
 }
 
 // Segmentos sólidos do campo e redes
-const wallSegments = [
-  // Linha lateral superior
-  { x1: CONFIG.pitch.left, y1: CONFIG.pitch.top, x2: CONFIG.pitch.right, y2: CONFIG.pitch.top, rest: CONFIG.physics.restitutionWall },
-  // Linha lateral inferior
-  { x1: CONFIG.pitch.left, y1: CONFIG.pitch.bottom, x2: CONFIG.pitch.right, y2: CONFIG.pitch.bottom, rest: CONFIG.physics.restitutionWall },
-
-  // Linhas de fundo
-  { x1: CONFIG.pitch.left, y1: CONFIG.pitch.top, x2: CONFIG.pitch.left, y2: CONFIG.goals.topY, rest: CONFIG.physics.restitutionWall },
-  { x1: CONFIG.pitch.left, y1: CONFIG.goals.bottomY, x2: CONFIG.pitch.left, y2: CONFIG.pitch.bottom, rest: CONFIG.physics.restitutionWall },
-  { x1: CONFIG.pitch.right, y1: CONFIG.pitch.top, x2: CONFIG.pitch.right, y2: CONFIG.goals.topY, rest: CONFIG.physics.restitutionWall },
-  { x1: CONFIG.pitch.right, y1: CONFIG.goals.bottomY, x2: CONFIG.pitch.right, y2: CONFIG.pitch.bottom, rest: CONFIG.physics.restitutionWall },
-
-  // Redes do Gol Esquerdo
-  { x1: CONFIG.pitch.left - CONFIG.goals.depth, y1: CONFIG.goals.topY, x2: CONFIG.pitch.left, y2: CONFIG.goals.topY, rest: 0.35 },
-  { x1: CONFIG.pitch.left - CONFIG.goals.depth, y1: CONFIG.goals.topY, x2: CONFIG.pitch.left - CONFIG.goals.depth, y2: CONFIG.goals.bottomY, rest: 0.35 },
-  { x1: CONFIG.pitch.left - CONFIG.goals.depth, y1: CONFIG.goals.bottomY, x2: CONFIG.pitch.left, y2: CONFIG.goals.bottomY, rest: 0.35 },
-
-  // Redes do Gol Direito
-  { x1: CONFIG.pitch.right, y1: CONFIG.goals.topY, x2: CONFIG.pitch.right + CONFIG.goals.depth, y2: CONFIG.goals.topY, rest: 0.35 },
-  { x1: CONFIG.pitch.right + CONFIG.goals.depth, y1: CONFIG.goals.topY, x2: CONFIG.pitch.right + CONFIG.goals.depth, y2: CONFIG.goals.bottomY, rest: 0.35 },
-  { x1: CONFIG.pitch.right, y1: CONFIG.goals.bottomY, x2: CONFIG.pitch.right + CONFIG.goals.depth, y2: CONFIG.goals.bottomY, rest: 0.35 }
-];
-
-const netSegmentsForPlayers = [
-  { x1: CONFIG.pitch.left - CONFIG.goals.depth, y1: CONFIG.goals.topY, x2: CONFIG.pitch.left, y2: CONFIG.goals.topY },
-  { x1: CONFIG.pitch.left - CONFIG.goals.depth, y1: CONFIG.goals.topY, x2: CONFIG.pitch.left - CONFIG.goals.depth, y2: CONFIG.goals.bottomY },
-  { x1: CONFIG.pitch.left - CONFIG.goals.depth, y1: CONFIG.goals.bottomY, x2: CONFIG.pitch.left, y2: CONFIG.goals.bottomY },
-  { x1: CONFIG.pitch.right, y1: CONFIG.goals.topY, x2: CONFIG.pitch.right + CONFIG.goals.depth, y2: CONFIG.goals.topY },
-  { x1: CONFIG.pitch.right + CONFIG.goals.depth, y1: CONFIG.goals.topY, x2: CONFIG.pitch.right + CONFIG.goals.depth, y2: CONFIG.goals.bottomY },
-  { x1: CONFIG.pitch.right, y1: CONFIG.goals.bottomY, x2: CONFIG.pitch.right + CONFIG.goals.depth, y2: CONFIG.goals.bottomY }
-];
+const wallSegments = [];
+const netSegmentsForPlayers = [];
+function rebuildPitchCollisionGeometry() {
+  const p=CONFIG.pitch,g=CONFIG.goals,r=CONFIG.physics.restitutionWall;
+  wallSegments.splice(0,wallSegments.length,
+    {x1:p.left,y1:p.top,x2:p.right,y2:p.top,rest:r},
+    {x1:p.left,y1:p.bottom,x2:p.right,y2:p.bottom,rest:r},
+    {x1:p.left,y1:p.top,x2:p.left,y2:g.topY,rest:r},
+    {x1:p.left,y1:g.bottomY,x2:p.left,y2:p.bottom,rest:r},
+    {x1:p.right,y1:p.top,x2:p.right,y2:g.topY,rest:r},
+    {x1:p.right,y1:g.bottomY,x2:p.right,y2:p.bottom,rest:r},
+    {x1:p.left-g.depth,y1:g.topY,x2:p.left,y2:g.topY,rest:.35},
+    {x1:p.left-g.depth,y1:g.topY,x2:p.left-g.depth,y2:g.bottomY,rest:.35},
+    {x1:p.left-g.depth,y1:g.bottomY,x2:p.left,y2:g.bottomY,rest:.35},
+    {x1:p.right,y1:g.topY,x2:p.right+g.depth,y2:g.topY,rest:.35},
+    {x1:p.right+g.depth,y1:g.topY,x2:p.right+g.depth,y2:g.bottomY,rest:.35},
+    {x1:p.right,y1:g.bottomY,x2:p.right+g.depth,y2:g.bottomY,rest:.35}
+  );
+  netSegmentsForPlayers.splice(0,netSegmentsForPlayers.length,
+    {x1:p.left-g.depth,y1:g.topY,x2:p.left,y2:g.topY},
+    {x1:p.left-g.depth,y1:g.topY,x2:p.left-g.depth,y2:g.bottomY},
+    {x1:p.left-g.depth,y1:g.bottomY,x2:p.left,y2:g.bottomY},
+    {x1:p.right,y1:g.topY,x2:p.right+g.depth,y2:g.topY},
+    {x1:p.right+g.depth,y1:g.topY,x2:p.right+g.depth,y2:g.bottomY},
+    {x1:p.right,y1:g.bottomY,x2:p.right+g.depth,y2:g.bottomY}
+  );
+}
 
 function resolveBallBoundaries(b) {
   for (let i = 0; i < wallSegments.length; i++) {
@@ -1103,6 +1249,59 @@ const aiState = {
   enemyGoalCenter: { x: CONFIG.pitch.left, y: CONFIG.pitch.centerY }
 };
 
+function shadowAdjustedTarget(actor,targetX,targetY,opponents){
+  if(actor.powerEffect!=='shadow'||!opponents.length)return {x:targetX,y:targetY};
+  const mark=opponents.reduce((nearest,opponent)=>Math.hypot(opponent.x-actor.x,opponent.y-actor.y)<Math.hypot(nearest.x-actor.x,nearest.y-actor.y)?opponent:nearest,opponents[0]);
+  return {x:targetX+(mark.x-actor.x)*.22,y:targetY+(mark.y-actor.y)*.22};
+}
+
+function closestActorTo(target,actors){
+  return actors.reduce((closest,actor)=>Math.hypot(actor.x-target.x,actor.y-target.y)<Math.hypot(closest.x-target.x,closest.y-target.y)?actor:closest,actors[0]);
+}
+
+function findControlledActor(actors){return actors.find(isBallControlledBy)||null;}
+
+function chooseBotSupportTarget(carrier,runner,defenders,attackDirection){
+  const p=CONFIG.pitch,advances=[118,164,210],lanes=[-132,-78,78,132];
+  let best=null,bestScore=-Infinity;
+  for(const advance of advances)for(const lane of lanes){
+    const target={
+      x:Math.max(p.left+runner.radius+16,Math.min(p.right-runner.radius-16,carrier.x+attackDirection*advance)),
+      y:Math.max(p.top+runner.radius+16,Math.min(p.bottom-runner.radius-16,carrier.y+lane))
+    };
+    const carrierGap=Math.hypot(target.x-carrier.x,target.y-carrier.y);
+    const defenderGap=defenders.length?Math.min(...defenders.map(defender=>Math.hypot(target.x-defender.x,target.y-defender.y))):190;
+    const runnerPathBlocked=defenders.some(defender=>pointSegmentDistance(defender.x,defender.y,runner.x,runner.y,target.x,target.y)<defender.radius+runner.radius+12);
+    const passPathBlocked=isPassPathBlocked(ball,target,carrier);
+    const forward=Math.max(0,(target.x-carrier.x)*attackDirection);
+    const score=Math.min(defenderGap,210)*.52-Math.abs(carrierGap-158)*.28+Math.min(forward,220)*.16
+      -(passPathBlocked?105:0)-(runnerPathBlocked?45:0)-Math.hypot(target.x-runner.x,target.y-runner.y)*.025;
+    if(score>bestScore){bestScore=score;best=target;}
+  }
+  return best||{x:carrier.x+attackDirection*140,y:carrier.y};
+}
+
+function steerBotToward(actor,targetX,targetY,speedScale=1){
+  const dx=targetX-actor.x,dy=targetY-actor.y,distance=Math.hypot(dx,dy);
+  if(distance<1)return;
+  const desiredSpeed=Math.min(CONFIG.physics.playerMaxSpeed*.92,Math.max(.8,distance*.12))*speedScale;
+  const blend=Math.min(.2,.12*speedScale);
+  actor.facingX=dx/distance;actor.facingY=dy/distance;
+  actor.vx+=(actor.facingX*desiredSpeed-actor.vx)*blend;
+  actor.vy+=(actor.facingY*desiredSpeed-actor.vy)*blend;
+}
+
+function steerBotDefense(actor,pressingBot,carrier,markedAttacker,ownGoalX){
+  if(actor===pressingBot){
+    steerBotToward(actor,carrier.x+carrier.vx*1.4,carrier.y+carrier.vy*1.4,1.08);
+    return;
+  }
+  const goalSide=ownGoalX>=CONFIG.pitch.centerX?1:-1,p=CONFIG.pitch;
+  const targetX=Math.max(p.left+actor.radius+18,Math.min(p.right-actor.radius-18,markedAttacker.x+goalSide*66));
+  const targetY=Math.max(p.top+actor.radius+18,Math.min(p.bottom-actor.radius-18,markedAttacker.y+(carrier.y-markedAttacker.y)*.16));
+  steerBotToward(actor,targetX,targetY,.96);
+}
+
 function updateAI(dt) {
   const ownGoal = aiState.ownGoalCenter;
 
@@ -1114,9 +1313,31 @@ function updateAI(dt) {
   }
 
   const distToBall = Math.hypot(ball.x - player2.x, ball.y - player2.y);
-  updatePowerBot(dt);
+  if(gameMode!=='training')updatePowerBot(dt,player2);
+  if(gameMode==='2v2'){
+    const redCarrier=findControlledActor([player2,awayMate]),blueCarrier=findControlledActor([player1,homeMate]);
+    if(redCarrier===awayMate){
+      const target=chooseBotSupportTarget(awayMate,player2,[player1,homeMate],-1);
+      steerBotToward(player2,target.x,target.y);return;
+    }
+    if(blueCarrier){
+      const pressBot=closestActorTo(ball,[player2,awayMate]),mark=blueCarrier===player1?homeMate:player1;
+      steerBotDefense(player2,pressBot,blueCarrier,mark,CONFIG.pitch.right);return;
+    }
+    if(!redCarrier){
+      const chaser=closestActorTo(ball,[player2,awayMate]);
+      if(chaser!==player2){
+        const target=chooseBotSupportTarget(chaser,player2,[player1,homeMate],-1);
+        steerBotToward(player2,target.x,target.y);return;
+      }
+    }
+  }
   if(isBallControlledBy(player2)){
     const dx=CONFIG.pitch.left-ball.x,dy=targetGoalY-ball.y,goalDistance=Math.hypot(dx,dy)||1;
+    const mateIsAhead=gameMode==='2v2'&&awayMate.x<ball.x-35;
+    if(mateIsAhead&&Math.hypot(awayMate.x-ball.x,awayMate.y-ball.y)<205&&goalDistance>260&&player2.kickCooldownTimer<=0&&!isPassPathBlocked(ball,awayMate,player2)){
+      player2.tryKick(ball,0,0,true,awayMate);return;
+    }
     player2.facingX=dx/goalDistance;player2.facingY=dy/goalDistance;
     player2.vx+=player2.facingX*CONFIG.physics.playerAcceleration*0.8;
     player2.vy+=player2.facingY*CONFIG.physics.playerAcceleration*0.8;
@@ -1175,6 +1396,10 @@ function updateAI(dt) {
     }
   }
 
+  const shadowTarget=shadowAdjustedTarget(player2,aiState.targetX,aiState.targetY,[player1,...(gameMode==='2v2'?[homeMate]:[])]);
+  aiState.targetX=Math.max(CONFIG.pitch.left+22,Math.min(CONFIG.pitch.right-22,shadowTarget.x));
+  aiState.targetY=Math.max(CONFIG.pitch.top+22,Math.min(CONFIG.pitch.bottom-22,shadowTarget.y));
+
   const toTargetDx = aiState.targetX - player2.x;
   const toTargetDy = aiState.targetY - player2.y;
   const toTargetDist = Math.hypot(toTargetDx, toTargetDy);
@@ -1197,23 +1422,86 @@ function updateAI(dt) {
   }
 }
 
+function updateAwayMateAI(dt) {
+  const p=CONFIG.pitch,goalY=ball.y<p.centerY?CONFIG.goals.topY+28:CONFIG.goals.bottomY-28;
+  updatePowerBot(dt,awayMate);
+  if(gameMode==='2v2'){
+    const redCarrier=findControlledActor([player2,awayMate]),blueCarrier=findControlledActor([player1,homeMate]);
+    if(redCarrier===player2){
+      const target=chooseBotSupportTarget(player2,awayMate,[player1,homeMate],-1);
+      steerBotToward(awayMate,target.x,target.y);return;
+    }
+    if(blueCarrier){
+      const pressBot=closestActorTo(ball,[player2,awayMate]),mark=blueCarrier===player1?homeMate:player1;
+      steerBotDefense(awayMate,pressBot,blueCarrier,mark,p.right);return;
+    }
+    if(!redCarrier){
+      const chaser=closestActorTo(ball,[player2,awayMate]);
+      if(chaser!==awayMate){
+        const target=chooseBotSupportTarget(chaser,awayMate,[player1,homeMate],-1);
+        steerBotToward(awayMate,target.x,target.y);return;
+      }
+    }
+  }
+  if(isBallControlledBy(awayMate)){
+    const goalDistance=Math.hypot(ball.x-p.left,goalY-ball.y);
+    awayMate.facingX=-1;awayMate.facingY=(goalY-ball.y)/(Math.hypot(p.left-ball.x,goalY-ball.y)||1);
+    if(player2.x<ball.x-35&&Math.hypot(player2.x-ball.x,player2.y-ball.y)<220&&goalDistance>260&&awayMate.kickCooldownTimer<=0&&!isPassPathBlocked(ball,player2,awayMate)){
+      awayMate.tryKick(ball,0,0,true,player2);return;
+    }
+    if(goalDistance<270&&awayMate.kickCooldownTimer<=0){awayMate.tryKick(ball,awayMate.facingX,awayMate.facingY);return;}
+    awayMate.vx+=awayMate.facingX*CONFIG.physics.playerAcceleration*.72;
+    awayMate.vy+=awayMate.facingY*CONFIG.physics.playerAcceleration*.72;
+    return;
+  }
+  const carrier=isBallControlledBy(player2)?player2:null;
+  let targetX,targetY;
+  if(carrier){
+    const sign=ball.y<p.centerY?1:-1;
+    targetX=Math.max(p.left+45,ball.x-115);
+    const upper=Math.max(p.top+38,Math.min(p.bottom-38,ball.y+sign*88));
+    const lower=Math.max(p.top+38,Math.min(p.bottom-38,ball.y-sign*88));
+    targetY=Math.hypot(upper-player1.x,upper-player1.y)>Math.hypot(lower-player1.x,lower-player1.y)?upper:lower;
+  } else {
+    const mateDistance=Math.hypot(ball.x-awayMate.x,ball.y-awayMate.y),carrierDistance=Math.hypot(ball.x-player2.x,ball.y-player2.y);
+    if(mateDistance<carrierDistance+35){targetX=ball.x;targetY=ball.y;}
+    else {targetX=Math.max(p.centerX+35,Math.min(p.right-48,p.centerX+(ball.x-p.centerX)*.38));targetY=ball.y+(ball.y<p.centerY?42:-42);}
+  }
+  targetY=Math.max(p.top+35,Math.min(p.bottom-35,targetY));
+  const shadowTarget=shadowAdjustedTarget(awayMate,targetX,targetY,[player1,homeMate]);targetX=shadowTarget.x;targetY=shadowTarget.y;
+  targetX=Math.max(p.left+22,Math.min(p.right-22,targetX));targetY=Math.max(p.top+22,Math.min(p.bottom-22,targetY));
+  const dx=targetX-awayMate.x,dy=targetY-awayMate.y,dist=Math.hypot(dx,dy)||1;
+  if(dist>6){awayMate.facingX=dx/dist;awayMate.facingY=dy/dist;awayMate.vx+=awayMate.facingX*CONFIG.physics.playerAcceleration*.88;awayMate.vy+=awayMate.facingY*CONFIG.physics.playerAcceleration*.88;}
+  if(Math.hypot(ball.x-awayMate.x,ball.y-awayMate.y)<awayMate.radius+ball.radius+CONFIG.physics.kickReachMargin&&ball.x>p.centerX-160&&awayMate.kickCooldownTimer<=0){
+    const dirX=ball.x-awayMate.x,dirY=ball.y-awayMate.y;
+    if(dirX>0)awayMate.tryKick(ball,1,(goalY-ball.y)/200);
+  }
+}
+
 function updateHomeMateAI(dt) {
   const p=CONFIG.pitch;
+  if(gameMode==='2v2'&&homeMate.visionRunTimer>0&&isBallControlledBy(homeMate)){
+    homeMate.facingX=homeMate.visionRunDirectionX;homeMate.facingY=homeMate.visionRunDirectionY;
+    homeMate.vx+=homeMate.facingX*CONFIG.physics.playerAcceleration*1.45;
+    homeMate.vy+=homeMate.facingY*CONFIG.physics.playerAcceleration*1.45;
+    return;
+  }
   if(twoOnePlay?.target===homeMate&&twoOnePlay.phase==='receiveWait'){
+    if(!isBallReceivedBy(homeMate))return;
     const faceX=player1.x-homeMate.x,faceY=player1.y-homeMate.y,length=Math.hypot(faceX,faceY)||1;
     homeMate.facingX=faceX/length;homeMate.facingY=faceY/length;
     if(twoOnePlay.waitTimer<=0){
       const targetPoint=projectTwoOneReceiver(CONFIG.physics.kickPower*.9*.92);
       if(homeMate.kickCooldownTimer>0||isPassPathBlocked(ball,targetPoint,homeMate)){finishTwoOne(false,'O retorno foi bloqueado; jogada encerrada');return;}
       if(homeMate.tryKick(ball,0,0,true,targetPoint)){
-        ball.vx*=0.92;ball.vy*=0.92;ball.dribbleLockTimer=0.16;twoOnePlay.phase='return';twoOnePlay.timer=2.1;twoOnePlay.returnAssistTimer=1.8;twoOnePlay.returnTurnBudget=.68;
+        ball.vx*=0.92;ball.vy*=0.92;ball.dribbleLockTimer=0.16;ball.dribbleLockOwner=homeMate;twoOnePlay.phase='return';twoOnePlay.timer=2.1;twoOnePlay.returnAssistTimer=1.8;twoOnePlay.returnTurnBudget=.68;
       }else finishTwoOne(false,'O companheiro não conseguiu devolver a bola');
     }
     return;
   }
   if(twoOnePlay?.target===homeMate&&twoOnePlay.phase==='outbound'){
-    if(isBallControlledBy(homeMate)){
-      twoOnePlay.phase='receiveWait';twoOnePlay.waitTimer=2;twoOnePlay.timer=3.8;
+  if(isBallReceivedBy(homeMate)){
+      twoOnePlay.phase='receiveWait';twoOnePlay.waitTimer=0.8;twoOnePlay.timer=2.6;twoOnePlay.receiveLostTimer=0;
       return;
     }
     const tx=ball.x+ball.vx*3,ty=ball.y+ball.vy*3,dx=tx-homeMate.x,dy=ty-homeMate.y,distance=Math.hypot(dx,dy)||1;
@@ -1222,6 +1510,23 @@ function updateHomeMateAI(dt) {
     return;
   }
   if(twoOnePlay?.target===homeMate&&twoOnePlay.phase==='return')return;
+  if(gameMode==='2v2'&&!isBallControlledBy(homeMate)){
+    const blueCarrier=findControlledActor([player1,homeMate]),redCarrier=findControlledActor([player2,awayMate]);
+    if(blueCarrier===player1){
+      const target=chooseBotSupportTarget(player1,homeMate,[player2,awayMate],1);
+      steerBotToward(homeMate,target.x,target.y);return;
+    }
+    if(redCarrier){
+      const mark=redCarrier===player2?awayMate:player2,pressBot=closestActorTo(ball,[player1,homeMate]);
+      steerBotDefense(homeMate,pressBot,redCarrier,mark,p.left);return;
+    }
+    const chaser=closestActorTo(ball,[player1,homeMate]);
+    if(chaser===homeMate){
+      steerBotToward(homeMate,ball.x+ball.vx*.6,ball.y+ball.vy*.6);return;
+    }
+    const target=chooseBotSupportTarget(player1,homeMate,[player2,awayMate],1);
+    steerBotToward(homeMate,target.x,target.y);return;
+  }
   if(isBallControlledBy(homeMate)){
     const playerDistance=Math.hypot(player1.x-ball.x,player1.y-ball.y);
     const goalY=ball.y< p.centerY?CONFIG.goals.topY+28:CONFIG.goals.bottomY-28;
@@ -1234,12 +1539,15 @@ function updateHomeMateAI(dt) {
     homeMate.vx+=homeMate.facingX*CONFIG.physics.playerAcceleration*0.72;homeMate.vy+=homeMate.facingY*CONFIG.physics.playerAcceleration*0.72;
     return;
   }
-  const targetX=Math.max(p.left+25,Math.min(p.right-38,ball.x+105));
+  let targetX=Math.max(p.left+25,Math.min(p.right-38,ball.x+105));
   const upperY=Math.max(p.top+38,Math.min(p.bottom-38,ball.y-92));
   const lowerY=Math.max(p.top+38,Math.min(p.bottom-38,ball.y+92));
-  const safetyScore=y=>Math.hypot(targetX-player2.x,y-player2.y)*0.75+Math.hypot(targetX-player1.x,y-player1.y)*0.3;
+  const safetyScore=y=>Math.hypot(targetX-player2.x,y-player2.y)*0.75+Math.hypot(targetX-player1.x,y-player1.y)*0.3+(gameMode==='2v2'?Math.hypot(targetX-awayMate.x,y-awayMate.y)*.7:0);
   let targetY=safetyScore(upperY)>=safetyScore(lowerY)?upperY:lowerY;
   if(Math.hypot(targetX-player1.x,targetY-player1.y)<64)targetY=targetY===upperY?lowerY:upperY;
+  const shadowTarget=shadowAdjustedTarget(homeMate,targetX,targetY,[player2,...(gameMode==='2v2'?[awayMate]:[])]);
+  targetX=shadowTarget.x;targetY=shadowTarget.y;
+  targetX=Math.max(p.left+22,Math.min(p.right-22,targetX));targetY=Math.max(p.top+22,Math.min(p.bottom-22,targetY));
   const dx=targetX-homeMate.x,dy=targetY-homeMate.y,distance=Math.hypot(dx,dy);
   if(distance>7){homeMate.facingX=dx/distance;homeMate.facingY=dy/distance;homeMate.vx+=(dx/distance)*CONFIG.physics.playerAcceleration*0.82;homeMate.vy+=(dy/distance)*CONFIG.physics.playerAcceleration*0.82;}
 }
@@ -1250,13 +1558,14 @@ function pointSegmentDistance(px,py,x1,y1,x2,y2) {
   return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));
 }
 function isPassPathBlocked(from,to,attacker){
-  const opponent=attacker===player2?player1:player2;
-  if(pointSegmentDistance(opponent.x,opponent.y,from.x,from.y,to.x,to.y)<opponent.radius+ball.radius+8)return true;
+  const opponents=(attacker===player1||attacker===homeMate)?[player2,...(gameMode==='2v2'?[awayMate]:[])]:[player1,...(gameMode==='2v2'?[homeMate]:[])];
+  if(opponents.some(opponent=>pointSegmentDistance(opponent.x,opponent.y,from.x,from.y,to.x,to.y)<opponent.radius+ball.radius+8))return true;
   return posts.some(post=>pointSegmentDistance(post.x,post.y,from.x,from.y,to.x,to.y)<post.radius+ball.radius+4);
 }
 
 function isVisionPassLaneBlocked() {
-  if(gameMode!=='training'&&pointSegmentDistance(player2.x,player2.y,ball.x,ball.y,homeMate.x,homeMate.y)<player2.radius+ball.radius+12)return true;
+  const blockers=[player2,...(gameMode==='2v2'?[awayMate]:[])];
+  if(gameMode!=='training'&&blockers.some(opponent=>pointSegmentDistance(opponent.x,opponent.y,ball.x,ball.y,homeMate.x,homeMate.y)<opponent.radius+ball.radius+12))return true;
   return posts.some(post=>pointSegmentDistance(post.x,post.y,ball.x,ball.y,homeMate.x,homeMate.y)<post.radius+ball.radius+5);
 }
 function nearestPassTeammate(actor){
@@ -1264,8 +1573,10 @@ function nearestPassTeammate(actor){
   return candidates.sort((a,b)=>Math.hypot(a.x-actor.x,a.y-actor.y)-Math.hypot(b.x-actor.x,b.y-actor.y))[0]||null;
 }
 function getTwoOneEligibleTargets(actor){
+  if(gameMode==='match')return [];
   const target=homeMate,distance=Math.hypot(target.x-actor.x,target.y-actor.y),pitch=CONFIG.pitch;
-  if(distance>230||Math.hypot(target.x-player2.x,target.y-player2.y)<player2.radius+target.radius+24)return [];
+  const opponents=[player2,...(gameMode==='2v2'?[awayMate]:[])];
+  if(distance>230||opponents.some(opponent=>Math.hypot(target.x-opponent.x,target.y-opponent.y)<opponent.radius+target.radius+24))return [];
   if(target.x-target.radius<pitch.left+8||target.x+target.radius>pitch.right-8||target.y-target.radius<pitch.top+8||target.y+target.radius>pitch.bottom-8)return [];
   if(isPassPathBlocked(ball,target,actor))return [];
   return [target];
@@ -1274,16 +1585,18 @@ function projectTwoOneReceiver(ballSpeed){
   let dirX=(input.right?1:0)-(input.left?1:0),dirY=(input.down?1:0)-(input.up?1:0);
   const hasMoveInput=!!(dirX||dirY);
   if(hasMoveInput){const length=Math.hypot(dirX,dirY);dirX/=length;dirY/=length;}
+  else if(twoOnePlay){dirX=twoOnePlay.runDirection.x;dirY=twoOnePlay.runDirection.y;}
   else {
     const speed=Math.hypot(player1.vx,player1.vy);
     if(speed>0.55){dirX=player1.vx/speed;dirY=player1.vy/speed;}
     else {dirX=player1.facingX;dirY=player1.facingY;}
   }
-  const projectedSpeed=hasMoveInput?Math.max(CONFIG.physics.playerMaxSpeed,player1.vx*dirX+player1.vy*dirY):Math.max(0,player1.vx*dirX+player1.vy*dirY);
+  const velocityAlongRun=player1.vx*dirX+player1.vy*dirY;
+  const projectedSpeed=hasMoveInput&&!twoOnePlay?Math.max(CONFIG.physics.playerMaxSpeed,velocityAlongRun):Math.max(0,velocityAlongRun);
   const gap=Math.hypot(player1.x-ball.x,player1.y-ball.y);
   // A bola e o recebedor avançam ao mesmo tempo; projeta o encontro pela velocidade relativa.
   const frames=Math.max(4,Math.min(120,gap/Math.max(1.8,ballSpeed-projectedSpeed)));
-  const p=CONFIG.pitch,lead=projectedSpeed*frames+10;
+  const p=CONFIG.pitch,lead=projectedSpeed*frames+(twoOnePlay?22:10);
   return {x:Math.max(p.left+player1.radius,Math.min(p.right-player1.radius,player1.x+dirX*lead)),y:Math.max(p.top+player1.radius,Math.min(p.bottom-player1.radius,player1.y+dirY*lead))};
 }
 function chooseTwoOneRunDirection(actor){
@@ -1292,7 +1605,7 @@ function chooseTwoOneRunDirection(actor){
   const clear=d=>{
     const tx=actor.x+d.x*100,ty=actor.y+d.y*100;
     if(tx<pitch.left+actor.radius||tx>pitch.right-actor.radius||ty<pitch.top+actor.radius||ty>pitch.bottom-actor.radius)return false;
-    if(pointSegmentDistance(player2.x,player2.y,actor.x,actor.y,tx,ty)<actor.radius+player2.radius+8)return false;
+    if([player2,...(gameMode==='2v2'?[awayMate]:[])].some(opponent=>pointSegmentDistance(opponent.x,opponent.y,actor.x,actor.y,tx,ty)<actor.radius+opponent.radius+8))return false;
     if(pointSegmentDistance(homeMate.x,homeMate.y,actor.x,actor.y,tx,ty)<actor.radius+homeMate.radius+6)return false;
     return posts.every(post=>pointSegmentDistance(post.x,post.y,actor.x,actor.y,tx,ty)>actor.radius+post.radius+5);
   };
@@ -1306,21 +1619,25 @@ function confirmTwoOneSelection(){
   if(!twoOneSelection)return false;
   const target=twoOneSelection.target,eligible=getTwoOneEligibleTargets(player1);
   if(!isBallControlledBy(player1)||!eligible.includes(target)){
-    twoOneSelection=null;showPowerFeedback('O alvo ficou indisponível; Dois pra Um cancelado',true);return false;
+    twoOneSelection=null;showPowerFeedback('O alvo ficou indisponível; Toque e Passa cancelado',true);return false;
   }
-  if(isPassPathBlocked(ball,target,player1)){twoOneSelection=null;showPowerFeedback('Linha bloqueada; Dois pra Um cancelado',true);return false;}
+  if(isPassPathBlocked(ball,target,player1)){twoOneSelection=null;showPowerFeedback('Linha bloqueada; Toque e Passa cancelado',true);return false;}
   if(!player1.tryKick(ball,0,0,true,target)){
     twoOneSelection=null;showPowerFeedback('Aguarde para dominar a bola antes da tabela',true);return false;
   }
-  ball.vx*=0.78;ball.vy*=0.78;
+  // A short, controlled feed gives the moving receiver room to cushion the ball.
+  ball.vx*=0.50;ball.vy*=0.50;
   player1.powerCooldown=POWER_COOLDOWNS.twoOne;player1.powerEffect='twoOne';player1.powerEffectTimer=0;
   const run=chooseTwoOneRunDirection(player1);
   twoOnePlay={phase:'outbound',target,timer:2.5,runDirection:{x:run.x,y:run.y},runTimer:0.58,trail:[]};
-  twoOneSelection=null;showPowerFeedback('Dois pra Um! Arranque para receber',false);
+  input.up=false;input.down=false;input.left=false;input.right=false;input.kickRequested=false;input.passRequested=false;
+  player1.vx=0;player1.vy=0;
+  twoOneSelection=null;showPowerFeedback('Toque e Passa! Arranque para receber',false);
   return true;
 }
 function finishTwoOne(success,message){
   if(!twoOnePlay)return;
+  if(success&&gameMode==='2v2'&&twoVtwoStats)twoVtwoStats.completed.twoOne=true;
   twoOnePlay=null;player1.powerEffect=null;player1.powerEffectTimer=0;twoOneImpactTimer=success?0.32:0;
   if(message)showPowerFeedback(message,!success);
 }
@@ -1335,12 +1652,22 @@ function updateTwoOneState(dt){
   const speed=Math.hypot(ball.vx,ball.vy);
   if(speed>1){play.trail.push({x:ball.x,y:ball.y});if(play.trail.length>11)play.trail.shift();}
   else if(play.trail.length)play.trail.shift();
-  if(play.phase==='return'&&isBallControlledBy(player1)){finishTwoOne(true,'Tabela concluída!');return;}
-  if(play.phase==='receiveWait'){
-    if(!isBallControlledBy(play.target)){finishTwoOne(false,'O companheiro perdeu a bola; jogada encerrada');return;}
-    play.waitTimer=Math.max(0,play.waitTimer-dt);
+  if(play.phase==='return'){
+    if(isBallReceivedBy(player1)){finishTwoOne(true,'Tabela concluída!');return;}
+    const distanceToReceiver=Math.hypot(ball.x-player1.x,ball.y-player1.y),receiveRadius=player1.radius+ball.radius+24;
+    if(distanceToReceiver<=receiveRadius){play.returnApproachStarted=true;play.returnNearTimer=(play.returnNearTimer||0)+dt;if(play.returnNearTimer>0.18){finishTwoOne(false,'A devolução não chegou controlada; siga a jogada');return;}}
+    else if(play.returnApproachStarted){finishTwoOne(false,'A devolução passou; siga a jogada');return;}
   }
-  if(gameMode!=='training'&&isBallControlledBy(player2)){finishTwoOne(false,'Passe interceptado; jogada encerrada');return;}
+  if(play.phase==='receiveWait'){
+    if(isBallReceivedBy(play.target)){
+      play.receiveLostTimer=0;play.waitTimer=Math.max(0,play.waitTimer-dt);
+    } else {
+      play.receiveLostTimer=(play.receiveLostTimer||0)+dt;
+      const distance=Math.hypot(ball.x-play.target.x,ball.y-play.target.y);
+      if(distance>play.target.radius+ball.radius+24||play.receiveLostTimer>0.18){finishTwoOne(false,'O companheiro perdeu a bola; jogada encerrada');return;}
+    }
+  }
+  if(gameMode!=='training'&&(isBallControlledBy(player2)||(gameMode==='2v2'&&isBallControlledBy(awayMate)))){finishTwoOne(false,'Passe interceptado; jogada encerrada');return;}
   if(play.timer<=0||ball.curveTimer>0&&play.phase==='return'){finishTwoOne(false,'A tabela não encaixou; siga a jogada');}
 }
 function updateTwoOneReturnAssist(dt){
@@ -1358,17 +1685,19 @@ function updateTwoOneReturnAssist(dt){
 function updateVisionPassAssist(dt) {
   if(ball.visionPassAssistTimer<=0)return;
   ball.visionPassAssistTimer=Math.max(0,ball.visionPassAssistTimer-dt);
-  if(!ball.visionPassAssistEnabled||player1.powerEffect!=='vision'||player1.powerEffectTimer<=0)return;
+  const passer=ball.passSource,target=ball.passTarget;
+  if(!ball.visionPassAssistEnabled||!passer||!target||passer.powerEffect!=='vision'||passer.powerEffectTimer<=0)return;
   const speed=Math.hypot(ball.vx,ball.vy);
   if(speed<3)return;
   const ux=ball.vx/speed,uy=ball.vy/speed,lookAhead=Math.min(250,speed*24);
   const endX=ball.x+ux*lookAhead,endY=ball.y+uy*lookAhead;
-  const along=(homeMate.x-ball.x)*ux+(homeMate.y-ball.y)*uy;
-  if(along<18||along>lookAhead||pointSegmentDistance(homeMate.x,homeMate.y,ball.x,ball.y,endX,endY)>46)return;
-  const blockRadius=player2.radius+ball.radius+4;
-  if(pointSegmentDistance(player2.x,player2.y,ball.x,ball.y,homeMate.x,homeMate.y)<blockRadius)return;
-  for(const post of posts)if(pointSegmentDistance(post.x,post.y,ball.x,ball.y,homeMate.x,homeMate.y)<post.radius+ball.radius+3)return;
-  const toX=homeMate.x-ball.x,toY=homeMate.y-ball.y;
+  const along=(target.x-ball.x)*ux+(target.y-ball.y)*uy;
+  if(along<18||along>lookAhead||pointSegmentDistance(target.x,target.y,ball.x,ball.y,endX,endY)>46)return;
+  const bluePass=passer===player1||passer===homeMate;
+  const blockers=bluePass?[player2,...(gameMode==='2v2'?[awayMate]:[])]:[player1,...(gameMode==='2v2'?[homeMate]:[])],blockRadius=ball.radius+4;
+  if(blockers.some(opponent=>pointSegmentDistance(opponent.x,opponent.y,ball.x,ball.y,target.x,target.y)<opponent.radius+blockRadius))return;
+  for(const post of posts)if(pointSegmentDistance(post.x,post.y,ball.x,ball.y,target.x,target.y)<post.radius+ball.radius+3)return;
+  const toX=target.x-ball.x,toY=target.y-ball.y;
   const angle=Math.atan2(ux*toY-uy*toX,ux*toX+uy*toY);
   if(Math.abs(angle)>0.5)return;
   const turn=Math.max(-0.0035,Math.min(0.0035,angle));
@@ -1376,7 +1705,49 @@ function updateVisionPassAssist(dt) {
   ball.vx=(ux*cos-uy*sin)*speed;ball.vy=(ux*sin+uy*cos)*speed;
 }
 
-const POWER_COOLDOWNS = {cannon:8,sprint:12,phantom:12,vision:16,curve:12,twoOne:18,control:12,eagle:12,sniper:14,shadow:15,ego:18};
+function chooseVisionRunDirection(mate) {
+  const p=CONFIG.pitch,candidates=[{x:1,y:-.45},{x:1,y:.45},{x:.8,y:-.75},{x:.8,y:.75}];
+  return candidates.map(dir=>{
+    const len=Math.hypot(dir.x,dir.y),nx=dir.x/len,ny=dir.y/len,tx=mate.x+nx*96,ty=mate.y+ny*96;
+    if(tx<p.left+mate.radius||tx>p.right-mate.radius||ty<p.top+mate.radius||ty>p.bottom-mate.radius)return {dir,score:-Infinity};
+    const space=Math.min(Math.hypot(tx-player2.x,ty-player2.y),Math.hypot(tx-awayMate.x,ty-awayMate.y));
+    const playerClear=Math.hypot(tx-player1.x,ty-player1.y);
+    if(playerClear<player1.radius+mate.radius+18)return {dir,score:-Infinity};
+    return {dir,score:space+Math.min(playerClear,120)*.08+nx*16};
+  }).sort((a,b)=>b.score-a.score)[0]?.dir||{x:1,y:0};
+}
+
+function updateTwoVtwoPassProgress(dt) {
+  if(gameMode!=='2v2'||!twoVtwoStats)return;
+  if(visionPassRoute){visionPassRoute.timer=Math.max(0,visionPassRoute.timer-dt);if(!visionPassRoute.timer)visionPassRoute=null;}
+  if(ball.passExpiry>0)ball.passExpiry=Math.max(0,ball.passExpiry-dt);
+  if(!ball.passTarget){if(isBallControlledBy(player2)||isBallControlledBy(awayMate)){twoVtwoStats.passStreak=0;twoVtwoStats.goalAssistPending=false;}return;}
+  const target=ball.passTarget,source=ball.passSource;
+  if(isBallReceivedBy(target)){
+    const teammatePass=(source===player1&&target===homeMate)||(source===homeMate&&target===player1);
+    if(teammatePass){
+      twoVtwoStats.passStreak++;if(twoVtwoStats.passStreak>=4)twoVtwoStats.completed.passes=true;
+      if(source===homeMate&&target===player1)twoVtwoStats.goalAssistPending=true;
+    }
+    if(ball.passWasVision&&source===player1&&target===homeMate){
+      const run=chooseVisionRunDirection(homeMate);
+      homeMate.visionRunDirectionX=run.x;homeMate.visionRunDirectionY=run.y;homeMate.visionRunTimer=.46;
+      visionPassRoute={from:{x:player1.x,y:player1.y},to:{x:homeMate.x,y:homeMate.y},timer:1.35,maxTimer:1.35};
+      showPowerFeedback('Passe encaixado · parceiro ataca o espaço',true,false);
+    }
+    ball.passTarget=null;ball.passSource=null;ball.passExpiry=0;ball.passWasVision=false;
+    return;
+  }
+  const intercepted=isBallControlledBy(player2)||isBallControlledBy(awayMate);
+  const possessionChanged=(isBallControlledBy(player1)||isBallControlledBy(homeMate))&&source!==ball.dribbleLockOwner;
+  if(intercepted||ball.passExpiry<=0||possessionChanged){
+    twoVtwoStats.passStreak=0;
+    if(intercepted)twoVtwoStats.goalAssistPending=false;
+    ball.passTarget=null;ball.passSource=null;ball.passExpiry=0;ball.passWasVision=false;
+  }
+}
+
+const POWER_COOLDOWNS = {cannon:8,sprint:12,phantom:12,vision:16,curve:12,twoOne:18,snakeTackle:16,control:12,eagle:12,sniper:14,shadow:15,ego:18};
 const POWER_LABELS = Object.fromEntries(ITEMS.powers.map(p => [p.id,p.name]));
 const PHANTOM_UPGRADE_COSTS = {2:1000,3:1800};
 function phantomLevelFor(actor) {
@@ -1387,9 +1758,15 @@ function phantomStats(actor) {
   return {level,duration:[0,0.55,0.60,0.65][level],dodgeChance:[0,0.38,0.44,0.50][level],cutForce:[0,4.8,5.1,5.4][level],cooldown:[0,12,11.25,10.5][level]};
 }
 function isBallControlledBy(actor) {
+  if(actor.tackleStaggerTimer>0)return false;
   const closeEnough=Math.hypot(ball.x-actor.x,ball.y-actor.y)<=actor.radius+ball.radius+9;
   const relativeSpeed=Math.hypot(ball.vx-actor.vx,ball.vy-actor.vy);
   return closeEnough&&relativeSpeed<=7.5;
+}
+function isBallReceivedBy(actor){
+  const distance=Math.hypot(ball.x-actor.x,ball.y-actor.y),relativeSpeed=Math.hypot(ball.vx-actor.vx,ball.vy-actor.vy);
+  // Uses the control radius and the same capture-speed limit as the dribble system.
+  return distance<=actor.radius+ball.radius+9&&relativeSpeed<=8.5;
 }
 function choosePhantomCut(actor) {
   const sideX=-actor.facingY,sideY=actor.facingX;
@@ -1411,8 +1788,9 @@ function phantomEvadesBote(holder,defender) {
   }
   return holder.ghostDodgeSuccess;
 }
+function shouldBallContact(collidingPlayer,ghostHolders){return !ghostHolders.some(holder=>phantomEvadesBote(holder,collidingPlayer));}
 function updatePhantomBallCarry(actor,dt) {
-  if(actor.powerEffect!=='phantom'||actor.phantomDribbleTimer<=0||ball.dribbleLockTimer>0||input.kickRequested)return;
+  if(actor.powerEffect!=='phantom'||actor.phantomDribbleTimer<=0||(ball.dribbleLockTimer>0&&ball.dribbleLockOwner===actor)||input.kickRequested)return;
   const inputX=actor.isHuman?(input.right?1:0)-(input.left?1:0):0;
   const inputY=actor.isHuman?(input.down?1:0)-(input.up?1:0):0;
   if(inputX||inputY){const len=Math.hypot(inputX,inputY);actor.phantomDirectionX=inputX/len;actor.phantomDirectionY=inputY/len;}
@@ -1425,7 +1803,7 @@ function updatePhantomBallCarry(actor,dt) {
   ball.vy+=(actor.vy-ball.vy)*0.08+correction(errorY);
 }
 function updatePlayerDribbleControl(actor){
-  if(actor.powerEffect==='phantom'||ball.curveTimer>0||ball.powerShotTimer>0||ball.dribbleLockTimer>0||(actor.isHuman&&input.kickRequested))return;
+  if(actor.tackleStaggerTimer>0||actor.powerEffect==='phantom'||ball.curveTimer>0||ball.powerShotTimer>0||(ball.dribbleLockTimer>0&&ball.dribbleLockOwner===actor)||(actor.isHuman&&input.kickRequested))return;
   const dx=ball.x-actor.x,dy=ball.y-actor.y,dist=Math.hypot(dx,dy),contactRange=actor.radius+ball.radius+18;
   if(dist>contactRange||Math.hypot(ball.vx-actor.vx,ball.vy-actor.vy)>8.5)return;
   let faceX=actor.facingX,faceY=actor.facingY;
@@ -1441,12 +1819,21 @@ function updatePlayerDribbleControl(actor){
   ball.vy+=(actor.vy-ball.vy)*0.38+correction(targetY-ball.y);
 }
 function applyPower(id, actor) {
-  if (!id || actor.powerCooldown > 0 || gameState.pausedForGoal || gameState.isGameOver || actor.powerEffectTimer > 0 || actor.powerEffect || actor.nextKickPower !== 1 || actor.nextKickReach !== 1 || twoOneSelection || twoOnePlay) return false;
+  if (!id || actor.powerCooldown > 0 || gameState.pausedForGoal || gameState.isGameOver || actor.powerEffectTimer > 0 || actor.powerEffect || actor.nextKickPower !== 1 || actor.nextKickReach !== 1 || twoOneSelection || twoOnePlay || snakeTackles.some(tackle=>tackle.owner===actor)) return false;
   const nearBall = Math.hypot(ball.x-actor.x,ball.y-actor.y) <= actor.radius+ball.radius+CONFIG.physics.kickReachMargin+15;
+  if(id==='snakeTackle'){
+    const opponents=getSnakeOpponents(actor),carrier=findControlledActor(opponents);
+    if(!['match','2v2','training'].includes(gameMode)||!carrier||Math.hypot(carrier.x-actor.x,carrier.y-actor.y)>185){
+      if(actor.isHuman)showPowerFeedback('O Bote da Serpente exige um rival com a bola por perto',true,false);
+      return false;
+    }
+    const directionLength=Math.hypot(actor.facingX,actor.facingY)||1;
+    snakeTackles.push({owner:actor,phase:'warning',timer:.42,phaseDuration:.42,dirX:actor.facingX/directionLength,dirY:actor.facingY/directionLength,range:164,resolved:false,hit:false,outcome:null});
+  }
   if(id==='twoOne'){
-    if(actor!==player1||!isBallControlledBy(actor)){if(actor.isHuman)showPowerFeedback('Domine a bola para iniciar o Dois pra Um',true);return false;}
+    if(actor!==player1||!isBallControlledBy(actor)){if(actor.isHuman)showPowerFeedback('Domine a bola para iniciar Toque e Passa',true);return false;}
     const targets=getTwoOneEligibleTargets(actor);
-    if(!targets.length){showPowerFeedback('Nenhum companheiro próximo e livre para a tabela',true);return false;}
+    if(!targets.length){showPowerFeedback('Nenhum companheiro próximo e livre para Toque e Passa',true);return false;}
     twoOneSelection={target:targets[0],timer:3};showPowerFeedback(`Alvo: companheiro · pressione F ou clique nele`,true);
     return true;
   }
@@ -1476,9 +1863,9 @@ function applyPower(id, actor) {
   } else if (id === 'vision') { actor.powerEffect='vision'; actor.powerEffectTimer=20; }
   else if (id === 'shadow') { actor.powerEffect='shadow'; actor.powerEffectTimer=4; }
   else if (id === 'sniper') actor.powerEffect='sniper';
-  actor.powerCooldown=id==='vision'||id==='curve'?0:(id==='phantom'?phantomStats(actor).cooldown:(POWER_COOLDOWNS[id]||12));
+  actor.powerCooldown=id==='vision'||id==='curve'||id==='snakeTackle'?0:(id==='phantom'?phantomStats(actor).cooldown:(POWER_COOLDOWNS[id]||12));
   if (actor.isHuman) {
-    showPowerFeedback(`${POWER_LABELS[id]} ativado`, false, !['cannon','sprint','phantom'].includes(id));
+    showPowerFeedback(`${POWER_LABELS[id]} ativado`, false, !['cannon','sprint','phantom','snakeTackle'].includes(id));
   }
   else showPowerFeedback(`${POWER_LABELS[id]}: bot`, true);
   if(id==='sprint') Sound.playLightning();
@@ -1486,18 +1873,19 @@ function applyPower(id, actor) {
   return true;
 }
 let powerReadyLast = true;
-let botPowerId = null;
-let botPowerThink = 3;
-function updatePowerBot(dt) {
-  botPowerThink-=dt;
-  if (botPowerThink>0 || player2.powerCooldown>0 || player2.powerEffectTimer>0 || player2.powerEffect) return;
-  botPowerThink=5+Math.random()*4;
-  if (Math.random()>0.45 || Math.hypot(ball.x-player2.x,ball.y-player2.y)>180) return;
+function updatePowerBot(dt,actor=player2) {
+  actor.aiPowerThink-=dt;
+  if (actor.aiPowerThink>0 || actor.powerCooldown>0 || actor.powerEffectTimer>0 || actor.powerEffect) return;
+  actor.aiPowerThink=7+Math.random()*3;
+  if (Math.random()>0.32 || Math.hypot(ball.x-actor.x,ball.y-actor.y)>190) return;
   const botPowers=ITEMS.powers.filter(power=>power.id!=='twoOne');
-  botPowerId=botPowerId || botPowers[Math.floor(Math.random()*botPowers.length)].id;
-  if (['cannon','curve','control','eagle','sniper','phantom'].includes(botPowerId) && Math.hypot(ball.x-player2.x,ball.y-player2.y)>player2.radius+ball.radius+30) return;
-  if (botPowerId==='phantom'&&!isBallControlledBy(player2)) return;
-  applyPower(botPowerId,player2); botPowerId=null;
+  actor.aiPowerId=botPowers[Math.floor(Math.random()*botPowers.length)].id;
+  const id=actor.aiPowerId,nearBall=Math.hypot(ball.x-actor.x,ball.y-actor.y)<=actor.radius+ball.radius+30;
+  if(['cannon','curve','control','eagle','sniper','phantom'].includes(id)&&!nearBall)return;
+  if(['curve','phantom'].includes(id)&&!isBallControlledBy(actor))return;
+  if(id==='sprint'&&Math.hypot(ball.x-actor.x,ball.y-actor.y)<40)return;
+  if(id==='shadow'&&Math.hypot(ball.x-actor.x,ball.y-actor.y)>145)return;
+  applyPower(id,actor);actor.aiPowerId=null;
 }
 function showPowerFeedback(message, quiet=false, sound=true) {
   const toast=document.getElementById('power-toast'); if(!toast) return;
@@ -1541,6 +1929,8 @@ const player1 = new Player(260, 300, 22, '#2b70f6', 10, true);
 const player2 = new Player(740, 300, 22, '#e53935', 10, false);
 const homeMate = new Player(390, 220, 20, '#2b70f6', 7, false);
 homeMate.isTeammate=true;
+const awayMate = new Player(810, 380, 20, '#f15b5b', 9, false);
+awayMate.isAwayMate=true;
 const ball = new Ball(CONFIG.pitch.centerX, CONFIG.pitch.centerY, 9.5);
 
 const posts = [
@@ -1549,6 +1939,18 @@ const posts = [
   new GoalPost(CONFIG.pitch.right, CONFIG.goals.topY),
   new GoalPost(CONFIG.pitch.right, CONFIG.goals.bottomY)
 ];
+
+function setPitchLayout(mode='match') {
+  const layout=PITCH_LAYOUTS[mode==='2v2'?'2v2':'match'],p=CONFIG.pitch,g=CONFIG.goals;
+  homeMate.radius=mode==='2v2'?22:20;awayMate.radius=mode==='2v2'?22:20;
+  p.left=layout.left;p.right=layout.right;p.top=layout.top;p.bottom=layout.bottom;
+  const center=(p.top+p.bottom)/2;g.topY=center-layout.goalHeight/2;g.bottomY=center+layout.goalHeight/2;
+  posts[0].x=posts[2].x=p.left;posts[1].x=posts[3].x=p.right;
+  posts.forEach((post,index)=>post.y=index%2===0?g.topY:g.bottomY);
+  rebuildPitchCollisionGeometry();
+  aiState.ownGoalCenter={x:p.right,y:p.centerY};
+  aiState.enemyGoalCenter={x:p.left,y:p.centerY};
+}
 
 // Estado global do jogo
 let gameState = {
@@ -1559,13 +1961,21 @@ let gameState = {
   timeRemaining: CONFIG.rules.matchDurationSeconds, // 180s regressivos
   scoreP1: 0,
   scoreP2: 0,
+  isOvertime: false,
+  overtimeTimeRemaining: 60,
   lastTimestamp: 0,
   physicsAccumulator: 0
 };
 let gameMode='match';
 let trainingMatchSnapshot=null;
+let trainingReturnMode='match';
 let hasNormalMatchInProgress=false;
+let trainingDummyHasBall=false;
 let twoOneSelection=null,twoOnePlay=null,twoOneImpactTimer=0;
+let visionPassRoute=null;
+let twoVtwoStats=null;
+
+function newTwoVtwoStats(){return {passStreak:0,completed:{passes:false,twoOne:false,goalAfterMatePass:false},goalAssistPending:false};}
 
 let playerConfig = {
   color: '#2b70f6',
@@ -1586,17 +1996,17 @@ const input = {
 window.addEventListener('keydown', (e) => {
   Sound.init();
   const code = e.code;
-  if (code === 'KeyW' || code === 'ArrowUp') input.up = true;
-  if (code === 'KeyS' || code === 'ArrowDown') input.down = true;
-  if (code === 'KeyA' || code === 'ArrowLeft') input.left = true;
-  if (code === 'KeyD' || code === 'ArrowRight') input.right = true;
+  if (!twoOnePlay && (code === 'KeyW' || code === 'ArrowUp')) input.up = true;
+  if (!twoOnePlay && (code === 'KeyS' || code === 'ArrowDown')) input.down = true;
+  if (!twoOnePlay && (code === 'KeyA' || code === 'ArrowLeft')) input.left = true;
+  if (!twoOnePlay && (code === 'KeyD' || code === 'ArrowRight')) input.right = true;
   if (code === 'Space') {
-    input.kickRequested = true;
+    if(!twoOnePlay)input.kickRequested = true;
     e.preventDefault();
   }
-  if (code === 'KeyF' && !e.repeat && gameState.running && !gameState.isGameOver && !gameState.pausedForGoal) { input.passRequested=true; e.preventDefault(); }
+  if (code === 'KeyF' && !twoOnePlay && !e.repeat && gameState.running && !gameState.isGameOver && !gameState.pausedForGoal) { input.passRequested=true; e.preventDefault(); }
   if(code==='Escape'&&twoOneSelection){twoOneSelection=null;input.passRequested=false;showPowerFeedback('Seleção cancelada',true);}
-  if (code === 'KeyQ') { input.powerRequested = true; e.preventDefault(); }
+  if (code === 'KeyQ') { if(!twoOnePlay)input.powerRequested = true; e.preventDefault(); }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -1612,7 +2022,7 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('mousedown', (e) => {
   Sound.init();
-  if(twoOneSelection)return;
+  if(twoOneSelection||twoOnePlay)return;
   if (e.button === 0 && gameState.running && !gameState.isGameOver && !e.target.closest('button')) {
     input.kickRequested = true;
   }
@@ -1627,7 +2037,7 @@ canvas.addEventListener('click',e=>{
 window.addEventListener('mouseup', (e) => {
   if (e.button === 0) input.kickRequested = false;
 });
-btnPass.addEventListener('click',()=>{if(gameState.running&&!gameState.isGameOver&&!gameState.pausedForGoal)input.passRequested=true;});
+btnPass.addEventListener('click',()=>{if(gameState.running&&!gameState.isGameOver&&!gameState.pausedForGoal&&!twoOnePlay)input.passRequested=true;});
 
 /* ==========================================================================
    8. DETECÇÃO DE GOLS E FIM DE PARTIDA
@@ -1663,8 +2073,11 @@ function handleGoal(scoringTeam) {
     gameState.scoreP2++;
     scoreP2El.textContent = gameState.scoreP2;
     goalBanner.style.color = '#f87171';
-    goalBanner.textContent = 'GOL DO BOT!';
+    goalBanner.textContent = gameMode==='2v2'?'GOL ADVERSÁRIO!':'GOL DO BOT!';
   }
+
+  if(gameMode==='2v2'&&scoringTeam==='p1'&&twoVtwoStats?.goalAssistPending)twoVtwoStats.completed.goalAfterMatePass=true;
+  if(gameMode==='2v2'&&twoVtwoStats)twoVtwoStats.goalAssistPending=false;
 
   goalBanner.classList.add('show');
   Sound.playGoal();
@@ -1673,12 +2086,18 @@ function handleGoal(scoringTeam) {
     addImpactSpark(ball.x, ball.y);
   }
 
-  // REGRA DE OURO: Verifica se alguém atingiu 5 gols
-  if (gameState.scoreP1 >= CONFIG.rules.goalsToWin || gameState.scoreP2 >= CONFIG.rules.goalsToWin) {
-    setTimeout(() => {
-      endGame(gameState.scoreP1 >= CONFIG.rules.goalsToWin ? 'p1_win_5_goals' : 'p2_win_5_goals');
-    }, 1500);
+  if(gameMode==='2v2'&&gameState.isOvertime){
+    setTimeout(()=>endGame(scoringTeam==='p1'?'p1_golden_goal':'p2_golden_goal'),1200);
+  } else if(gameMode!=='2v2'&&(gameState.scoreP1 >= CONFIG.rules.goalsToWin || gameState.scoreP2 >= CONFIG.rules.goalsToWin)) {
+    setTimeout(() => endGame(gameState.scoreP1 >= CONFIG.rules.goalsToWin ? 'p1_win_5_goals' : 'p2_win_5_goals'),1500);
   }
+}
+
+function beginGoldenGoal() {
+  gameState.isOvertime=true;gameState.overtimeTimeRemaining=60;gameState.timeRemaining=0;
+  resetPositions();gameState.pausedForGoal=true;gameState.goalPauseTimer=1.2;
+  goalBanner.style.color='#fbbf24';goalBanner.textContent='GOL DE OURO';goalBanner.classList.add('show');
+  updateTimerDisplay();showPowerFeedback('Empate · prorrogação de gol de ouro',true,false);
 }
 
 function endGame(reason) {
@@ -1690,51 +2109,66 @@ function endGame(reason) {
   finalScoreP1El.textContent = gameState.scoreP1;
   finalScoreP2El.textContent = gameState.scoreP2;
   finalBadgeP1.style.backgroundColor = playerConfig.color;
+  const finalTeamNames=document.querySelectorAll('.final-team-name');
+  finalTeamNames[0].textContent=gameMode==='2v2'?'Você + Parceiro':'Você';
+  finalTeamNames[1].textContent=gameMode==='2v2'?'Dupla adversária':'Bot';
 
   // Determina resultado
   let outcome; // 'win' | 'draw' | 'loss'
-  if (reason === 'p1_win_5_goals') {
+  if (reason === 'p1_win_5_goals' || reason === 'p1_golden_goal') {
     outcome = 'win';
     gameOverTitle.textContent  = 'VITÓRIA ÉPICA!';
     gameOverTitle.style.color  = '#4ade80';
-    gameOverReason.textContent = `Você atingiu ${CONFIG.rules.goalsToWin} gols primeiro e conquistou a partida!`;
-  } else if (reason === 'p2_win_5_goals') {
+    gameOverReason.textContent = reason==='p1_golden_goal'?'Sua dupla marcou o gol de ouro e venceu!':`Você atingiu ${CONFIG.rules.goalsToWin} gols primeiro e conquistou a partida!`;
+  } else if (reason === 'p2_win_5_goals' || reason === 'p2_golden_goal') {
     outcome = 'loss';
     gameOverTitle.textContent  = 'DERROTA!';
     gameOverTitle.style.color  = '#f87171';
-    gameOverReason.textContent = `O Bot Vermelho atingiu ${CONFIG.rules.goalsToWin} gols primeiro.`;
+    gameOverReason.textContent = reason==='p2_golden_goal'?'A dupla adversária marcou o gol de ouro.':`O Bot Vermelho atingiu ${CONFIG.rules.goalsToWin} gols primeiro.`;
   } else {
     // Tempo Esgotado
     if (gameState.scoreP1 > gameState.scoreP2) {
       outcome = 'win';
       gameOverTitle.textContent  = 'VITÓRIA!';
       gameOverTitle.style.color  = '#4ade80';
-      gameOverReason.textContent = 'O tempo regulamentar acabou e você venceu no placar!';
+      gameOverReason.textContent = gameMode==='2v2'?'Sua dupla venceu a partida!':'O tempo regulamentar acabou e você venceu no placar!';
     } else if (gameState.scoreP2 > gameState.scoreP1) {
       outcome = 'loss';
       gameOverTitle.textContent  = 'DERROTA!';
       gameOverTitle.style.color  = '#f87171';
-      gameOverReason.textContent = 'O tempo acabou e o Bot Vermelho marcou mais gols.';
+      gameOverReason.textContent = gameMode==='2v2'?'A dupla adversária venceu a partida.':'O tempo acabou e o Bot Vermelho marcou mais gols.';
     } else {
       outcome = 'draw';
       gameOverTitle.textContent  = 'EMPATE!';
       gameOverTitle.style.color  = '#fbbf24';
-      gameOverReason.textContent = 'Partida muito disputada! Terminou em empate.';
+      gameOverReason.textContent = gameMode==='2v2'?'O gol de ouro não saiu. A partida terminou empatada.':'Partida muito disputada! Terminou em empate.';
     }
   }
 
   // Calcula recompensas
   const baseReward  = ECONOMY.REWARDS[outcome === 'win' ? 'win' : outcome === 'draw' ? 'draw' : 'loss'];
+  const participationReward=gameMode==='2v2'?50:0;
+  const winBonus=gameMode==='2v2'&&outcome==='win'?50:0;
   const goalsReward = gameState.scoreP1 * ECONOMY.REWARDS.perGoal;
-  const totalReward = baseReward + goalsReward;
+  const challengeReward=gameMode==='2v2'&&twoVtwoStats?Object.values(twoVtwoStats.completed).reduce((sum,complete)=>sum+(complete?25:0),0):0;
+  const totalReward = baseReward + participationReward + winBonus + goalsReward + challengeReward;
   const newBalance  = ECONOMY.addCoins(totalReward);
 
   // Preenche UI de Recompensas
   const resultLabel = outcome === 'win' ? 'Vitória' : outcome === 'draw' ? 'Empate' : 'Derrota';
   document.getElementById('reward-result-label').textContent = `${resultLabel}:`;
   document.getElementById('reward-result-val').textContent   = `+${baseReward} 🪙`;
-  document.getElementById('reward-goals-label').textContent  = `Gols marcados (${gameState.scoreP1}×10):`;
+  document.getElementById('reward-goals-label').textContent  = `${gameMode==='2v2'?'Gols da dupla':'Gols marcados'} (${gameState.scoreP1}×10):`;
   document.getElementById('reward-goals-val').textContent    = `+${goalsReward} 🪙`;
+  document.getElementById('reward-participation-row').hidden=gameMode!=='2v2';
+  document.getElementById('reward-participation-val').textContent=`+${participationReward} 🪙`;
+  document.getElementById('reward-win-row').hidden=winBonus===0;
+  document.getElementById('reward-win-val').textContent=`+${winBonus} 🪙`;
+  document.getElementById('reward-challenges-row').hidden=gameMode!=='2v2';
+  document.getElementById('reward-challenges-val').textContent=`+${challengeReward} 🪙`;
+  const challengeNames={passes:'Completar 4 passes seguidos',twoOne:'Completar uma tabela Toque e Passa',goalAfterMatePass:'Marcar após receber do parceiro'};
+  document.getElementById('two-v-two-challenges-summary').textContent=gameMode==='2v2'&&twoVtwoStats?`Desafios (25 litocoins cada):\n${Object.entries(challengeNames).map(([key,name])=>`${twoVtwoStats.completed[key]?'✓':'○'} ${name}`).join('\n')}`:'';
+  document.getElementById('two-v-two-challenges-summary').hidden=gameMode!=='2v2';
   document.getElementById('reward-new-balance').textContent  = `🪙 ${newBalance.toLocaleString('pt-BR')}`;
 
   // Animação de contagem do total ganho
@@ -1753,38 +2187,71 @@ function endGame(reason) {
 }
 
 function resetPositions() {
+  snakeTackles.length=0;
   twoOneSelection=null;twoOnePlay=null;twoOneImpactTimer=0;
-  player1.reset(260, 300);
-  player2.reset(740, 300);
-  homeMate.reset(390, 220);
-  ball.reset(CONFIG.pitch.centerX, CONFIG.pitch.centerY);
+  const p=CONFIG.pitch;
+  if(gameMode==='2v2'){
+    player1.reset(p.left+p.width*.30,p.centerY);
+    homeMate.reset(p.left+p.width*.43,p.centerY+82);
+    player2.reset(p.right-p.width*.30,p.centerY+5);
+    awayMate.reset(p.right-p.width*.43,p.centerY-82);
+  } else if(gameMode==='training'){
+    trainingDummyHasBall=true;player1.reset(p.centerX-200,p.centerY);player1.facingX=1;player1.facingY=0;homeMate.reset(p.centerX-285,p.centerY+105);
+    player2.reset(p.centerX-70,p.centerY);pinTrainingDummy();awayMate.reset(CONFIG.canvasWidth+130,CONFIG.canvasHeight+100);
+  } else {
+    player1.reset(260,300);player2.reset(740,300);
+    homeMate.reset(CONFIG.canvasWidth+100,CONFIG.canvasHeight+100);awayMate.reset(CONFIG.canvasWidth+130,CONFIG.canvasHeight+100);
+  }
+  ball.reset(p.centerX,p.centerY);visionPassRoute=null;
   goalBanner.classList.remove('show');
 }
 
 function copyEntityState(entity){return JSON.parse(JSON.stringify(entity));}
+function restoreEntityReference(entity){if(!entity)return null;return entity.isHuman?player1:entity.isAwayMate?awayMate:entity.isTeammate?homeMate:player2;}
+function serializeSnakeTackle(tackle){const ownerKey=tackle.owner===player1?'player1':tackle.owner===homeMate?'homeMate':tackle.owner===awayMate?'awayMate':'player2';const {owner,...state}=tackle;return {...state,ownerKey};}
+function restoreSnakeTackle(state){const {ownerKey,...tackle}=state;return {...tackle,owner:({player1,player2,homeMate,awayMate})[ownerKey]||player1};}
+function pinTrainingDummy(){
+  const p=CONFIG.pitch;
+  player2.x=p.centerX-70;player2.y=p.centerY;player2.vx=0;player2.vy=0;player2.facingX=-1;player2.facingY=0;
+}
+function updateTrainingDummyBall(){
+  if(gameMode!=='training')return;
+  const distance=Math.hypot(ball.x-player2.x,ball.y-player2.y),speed=Math.hypot(ball.vx,ball.vy),holdDistance=player2.radius+ball.radius+4;
+  if(ball.dribbleLockOwner===player1||speed>4.5||distance>holdDistance+65)trainingDummyHasBall=false;
+  else if(!trainingDummyHasBall&&!ball.dribbleLockOwner&&speed<.8&&distance<100)trainingDummyHasBall=true;
+  if(!trainingDummyHasBall)return;
+  ball.x=player2.x-player2.radius-ball.radius-4;ball.y=player2.y;ball.vx=0;ball.vy=0;ball.dribbleLockTimer=1/60;ball.dribbleLockOwner=player2;
+}
 function beginTraining(){
-  trainingMatchSnapshot=hasNormalMatchInProgress?{game:{timeRemaining:gameState.timeRemaining,scoreP1:gameState.scoreP1,scoreP2:gameState.scoreP2,isGameOver:gameState.isGameOver,pausedForGoal:gameState.pausedForGoal,goalPauseTimer:gameState.goalPauseTimer},player1:copyEntityState(player1),player2:copyEntityState(player2),homeMate:copyEntityState(homeMate),ball:copyEntityState(ball),twoOneSelection:twoOneSelection?{timer:twoOneSelection.timer}:null,twoOnePlay:twoOnePlay?{...twoOnePlay,runDirection:{...twoOnePlay.runDirection},trail:twoOnePlay.trail.map(point=>({...point}))}:null,twoOneImpactTimer}:null;
+  trainingReturnMode=gameMode==='2v2'?'2v2':'match';
+  trainingMatchSnapshot=hasNormalMatchInProgress?{game:{timeRemaining:gameState.timeRemaining,scoreP1:gameState.scoreP1,scoreP2:gameState.scoreP2,isGameOver:gameState.isGameOver,pausedForGoal:gameState.pausedForGoal,goalPauseTimer:gameState.goalPauseTimer,isOvertime:gameState.isOvertime,overtimeTimeRemaining:gameState.overtimeTimeRemaining},player1:copyEntityState(player1),player2:copyEntityState(player2),homeMate:copyEntityState(homeMate),awayMate:copyEntityState(awayMate),ball:copyEntityState(ball),twoOneSelection:twoOneSelection?{timer:twoOneSelection.timer}:null,twoOnePlay:twoOnePlay?{...twoOnePlay,runDirection:{...twoOnePlay.runDirection},trail:twoOnePlay.trail.map(point=>({...point}))}:null,twoOneImpactTimer,twoVtwoStats:twoVtwoStats?copyEntityState(twoVtwoStats):null}:null;
+  if(trainingMatchSnapshot)trainingMatchSnapshot.snakeTackles=snakeTackles.map(serializeSnakeTackle);
+  snakeTackles.length=0;
+  setPitchLayout('match');
   gameMode='training';gameState.running=true;gameState.isGameOver=false;gameState.pausedForGoal=false;gameState.physicsAccumulator=0;
+  refreshModeHud();
   twoOneSelection=null;twoOnePlay=null;twoOneImpactTimer=0;
-  player1.reset(CONFIG.pitch.centerX-120,CONFIG.pitch.centerY);player1.powerCooldown=0;player1.powerEffect=null;player1.powerEffectTimer=0;player1.nextKickPower=1;player1.nextKickReach=1;
-  homeMate.reset(CONFIG.pitch.centerX+130,CONFIG.pitch.centerY);homeMate.vx=0;homeMate.vy=0;
-  player2.reset(CONFIG.canvasWidth+100,CONFIG.canvasHeight+100);ball.reset(CONFIG.pitch.centerX,CONFIG.pitch.centerY);
+  trainingDummyHasBall=true;
+  player1.reset(CONFIG.pitch.centerX-200,CONFIG.pitch.centerY);player1.facingX=1;player1.facingY=0;player1.powerCooldown=0;player1.powerEffect=null;player1.powerEffectTimer=0;player1.nextKickPower=1;player1.nextKickReach=1;
+  homeMate.reset(CONFIG.pitch.centerX-285,CONFIG.pitch.centerY+105);homeMate.vx=0;homeMate.vy=0;
+  player2.reset(CONFIG.pitch.centerX-70,CONFIG.pitch.centerY);pinTrainingDummy();player2.powerCooldown=0;player2.aiPowerId=null;awayMate.reset(CONFIG.canvasWidth+130,CONFIG.canvasHeight+100);ball.reset(CONFIG.pitch.centerX,CONFIG.pitch.centerY);
   input.passRequested=false;input.kickRequested=false;
   document.getElementById('hud-score').hidden=true;timerEl.hidden=true;document.getElementById('hud-training-label').hidden=false;
-  document.getElementById('name-p2').hidden=true;document.querySelectorAll('#hud .team-badge')[1].hidden=true;
+  document.getElementById('name-p2').hidden=false;document.querySelectorAll('#hud .team-badge')[1].hidden=false;
   btnMenu.textContent='Voltar ao menu';btnRestart.textContent='Reiniciar treino';
   document.getElementById('power-hud').classList.toggle('hidden',!profile.equippedPower);
   menuOverlay.classList.add('hidden');gameOverOverlay.classList.add('hidden');menuWasRunning=false;
   gameState.lastTimestamp=performance.now();requestAnimationFrame(gameLoop);
 }
 function leaveTraining(){
-  gameState.running=false;gameMode='match';
+  gameState.running=false;trainingDummyHasBall=false;gameMode=trainingReturnMode;setPitchLayout(gameMode);
   const hadMatchSnapshot=!!trainingMatchSnapshot;
   document.getElementById('hud-score').hidden=false;timerEl.hidden=false;document.getElementById('hud-training-label').hidden=true;
-  document.getElementById('name-p2').hidden=false;document.querySelectorAll('#hud .team-badge')[1].hidden=false;
+  document.getElementById('name-p2').hidden=false;document.querySelectorAll('#hud .team-badge')[1].hidden=false;refreshModeHud();
   btnMenu.textContent='Menu';btnRestart.textContent='Reset';
   if(trainingMatchSnapshot){
-    const snapshot=trainingMatchSnapshot;Object.assign(player1,snapshot.player1);Object.assign(player2,snapshot.player2);Object.assign(homeMate,snapshot.homeMate);Object.assign(ball,snapshot.ball);Object.assign(gameState,snapshot.game);twoOneSelection=snapshot.twoOneSelection?{...snapshot.twoOneSelection,target:homeMate}:null;twoOnePlay=snapshot.twoOnePlay?{...snapshot.twoOnePlay,target:homeMate}:null;twoOneImpactTimer=snapshot.twoOneImpactTimer||0;trainingMatchSnapshot=null;
+    const snapshot=trainingMatchSnapshot;Object.assign(player1,snapshot.player1);Object.assign(player2,snapshot.player2);Object.assign(homeMate,snapshot.homeMate);Object.assign(awayMate,snapshot.awayMate);Object.assign(ball,snapshot.ball);if(ball.dribbleLockOwner&&!(ball.dribbleLockOwner instanceof Player)){ball.dribbleLockOwner=ball.dribbleLockOwner.isTeammate?homeMate:ball.dribbleLockOwner.isHuman?player1:ball.dribbleLockOwner.isAwayMate?awayMate:player2;}Object.assign(gameState,snapshot.game);twoOneSelection=snapshot.twoOneSelection?{...snapshot.twoOneSelection,target:homeMate}:null;twoOnePlay=snapshot.twoOnePlay?{...snapshot.twoOnePlay,target:homeMate}:null;twoOneImpactTimer=snapshot.twoOneImpactTimer||0;twoVtwoStats=snapshot.twoVtwoStats;snakeTackles.splice(0,snakeTackles.length,...(snapshot.snakeTackles||[]).map(restoreSnakeTackle));trainingMatchSnapshot=null;
+    ball.passTarget=restoreEntityReference(ball.passTarget);ball.passSource=restoreEntityReference(ball.passSource);
     scoreP1El.textContent=gameState.scoreP1;scoreP2El.textContent=gameState.scoreP2;updateTimerDisplay();
   }
   document.getElementById('power-hud').classList.add('hidden');
@@ -1792,26 +2259,41 @@ function leaveTraining(){
 }
 function resetTraining(){
   twoOneSelection=null;twoOnePlay=null;twoOneImpactTimer=0;
-  player1.reset(CONFIG.pitch.centerX-120,CONFIG.pitch.centerY);player1.powerCooldown=0;player1.powerEffect=null;player1.powerEffectTimer=0;player1.nextKickPower=1;player1.nextKickReach=1;
-  homeMate.reset(CONFIG.pitch.centerX+130,CONFIG.pitch.centerY);player2.reset(CONFIG.canvasWidth+100,CONFIG.canvasHeight+100);ball.reset(CONFIG.pitch.centerX,CONFIG.pitch.centerY);
+  trainingDummyHasBall=true;
+  player1.reset(CONFIG.pitch.centerX-200,CONFIG.pitch.centerY);player1.facingX=1;player1.facingY=0;player1.powerCooldown=0;player1.powerEffect=null;player1.powerEffectTimer=0;player1.nextKickPower=1;player1.nextKickReach=1;
+  homeMate.reset(CONFIG.pitch.centerX-285,CONFIG.pitch.centerY+105);player2.reset(CONFIG.pitch.centerX-70,CONFIG.pitch.centerY);pinTrainingDummy();player2.powerCooldown=0;player2.aiPowerId=null;player2.nextKickPower=1;player2.nextKickReach=1;awayMate.reset(CONFIG.canvasWidth+130,CONFIG.canvasHeight+100);ball.reset(CONFIG.pitch.centerX,CONFIG.pitch.centerY);
 }
 
-function startFreshMatch() {
-  gameMode='match';trainingMatchSnapshot=null;
+function refreshModeHud(){
+  document.getElementById('name-p1').textContent=gameMode==='2v2'?'Você + Parceiro':'Você';
+  document.getElementById('name-p2').textContent=gameMode==='training'?'Adversário de Treino':gameMode==='2v2'?'Dupla Vermelha':'Bot Vermelho';
+  document.getElementById('badge-p1').style.backgroundColor=playerConfig.color;
+  document.querySelectorAll('#hud .team-badge')[1].style.backgroundColor='#e53935';
+  document.getElementById('hud-training-label').textContent='Treino livre · adversário parado';
+}
+
+function startFreshMatch(mode='match') {
+  gameMode=mode==='2v2'?'2v2':'match';setPitchLayout(gameMode);trainingMatchSnapshot=null;
   hasNormalMatchInProgress=true;
   input.passRequested=false;
+  input.kickRequested=false;input.up=false;input.down=false;input.left=false;input.right=false;
   gameState.scoreP1 = 0;
   gameState.scoreP2 = 0;
   gameState.timeRemaining = CONFIG.rules.matchDurationSeconds;
   gameState.isGameOver = false;
   gameState.pausedForGoal = false;
   gameState.goalPauseTimer = 0;
+  gameState.isOvertime=false;gameState.overtimeTimeRemaining=60;
+  twoVtwoStats=gameMode==='2v2'?newTwoVtwoStats():null;
   player1.powerCooldown=0; player1.powerEffect=null; player1.powerEffectTimer=0; player1.nextKickPower=1; player1.nextKickReach=1;
   player2.powerCooldown=0; player2.powerEffect=null; player2.powerEffectTimer=0; player2.nextKickPower=1; player2.nextKickReach=1;
+  for(const bot of [homeMate,awayMate,player2]){bot.powerCooldown=0;bot.aiPowerThink=6+Math.random()*3;bot.aiPowerId=null;bot.nextKickPower=1;bot.nextKickReach=1;}
   scoreP1El.textContent = '0';
   scoreP2El.textContent = '0';
   updateTimerDisplay();
   gameOverOverlay.classList.add('hidden');
+  document.getElementById('hud-score').hidden=false;timerEl.hidden=false;document.getElementById('hud-training-label').hidden=true;
+  document.getElementById('name-p2').hidden=false;document.querySelectorAll('#hud .team-badge')[1].hidden=false;refreshModeHud();
   resetPositions();
   updateCoinUI();
   updatePowerHud();
@@ -1836,7 +2318,7 @@ appearanceControls.forEach(el=>el.remove());
 const navRow=document.createElement('div'); navRow.className='menu-nav-row'; navRow.innerHTML='<button class="secondary-btn" data-training>Treino</button><button class="secondary-btn" data-view="options">Opções</button><button class="secondary-btn" data-view="shop">Loja</button><button class="secondary-btn" data-view="inventory">Inventário</button><button class="secondary-btn" data-view="credits">Créditos</button>';
 startBtn.before(navRow);
 navRow.querySelector('[data-training]').addEventListener('click',beginTraining);
-startBtn.textContent='Jogar';
+startBtn.textContent='Jogar 1v1';
 const menuPage=document.createElement('div'); menuPage.className='menu-page hidden'; document.getElementById('menu-overlay').appendChild(menuPage);
 let menuWasRunning=false, activePage='shop', activeCategory='shirts';
 const pageNames={shop:'Loja',inventory:'Inventário',options:'Opções',credits:'Créditos'};
@@ -1897,14 +2379,16 @@ function updatePowerHud(){
  const visionActive=power?.id==='vision'&&player1.powerEffect==='vision'&&player1.powerEffectTimer>0;
  const curveArmed=power?.id==='curve'&&player1.powerEffect==='curve';
  const twoOneChoosing=!!twoOneSelection,twoOneActive=!!twoOnePlay;
+  const snakeTackle=snakeTackles.find(tackle=>tackle.owner===player1),snakeActive=!!snakeTackle;
+  const powerButton=document.getElementById('power-activate'),powerButtonLabel=power?.id==='snakeTackle'?'Ativar Bote da Serpente (Q)':'Ativar poder (Q)';powerButton.textContent=power?.id==='snakeTackle'?'🐍':'⚡';powerButton.title=powerButtonLabel;powerButton.setAttribute('aria-label',powerButtonLabel);
  btnPass.hidden=!gameState.running;btnPass.textContent=curveArmed?'Passe curvo (F)':visionActive?'Passe teleguiado (F)':'Passe (F)';btnPass.title=curveArmed?'Passe curvo para o companheiro mais próximo':visionActive?'Passe teleguiado para o companheiro mais próximo':'Passe para o companheiro mais próximo (F)';
- const effectActive=player1.powerEffectTimer>0;
- const cooldownReady=player1.powerCooldown<=0;const ready=cooldownReady&&!shotBuffPending&&!effectActive&&!twoOneChoosing&&!twoOneActive;const btn=document.getElementById('power-activate');btn.classList.toggle('cooldown',!cooldownReady);btn.classList.toggle('active',visionActive||twoOneChoosing||twoOneActive);btn.disabled=!ready;
+  const effectActive=player1.powerEffectTimer>0||snakeActive;
+  const cooldownReady=player1.powerCooldown<=0;const ready=cooldownReady&&!shotBuffPending&&!effectActive&&!twoOneChoosing&&!twoOneActive;const btn=powerButton;btn.classList.toggle('cooldown',!cooldownReady);btn.classList.toggle('active',visionActive||twoOneChoosing||twoOneActive||snakeActive);btn.disabled=!ready;
  if(ready&&!powerReadyLast&&power){showPowerFeedback('Poder disponível',true);} powerReadyLast=ready;
  const cooldownDuration=power?.id==='phantom'?phantomStats(player1).cooldown:(POWER_COOLDOWNS[power?.id]||12);
  const fill=document.getElementById('power-meter-fill');
  fill.style.width=visionActive?`${Math.max(0,player1.powerEffectTimer/20*100)}%`:cooldownReady?'100%':`${Math.max(0,100*(1-player1.powerCooldown/cooldownDuration))}%`;
- document.getElementById('power-status').textContent=twoOneChoosing?`Escolha ${twoOneSelection.target.isTeammate?'companheiro':'alvo'} · F ou clique`:twoOneActive?twoOnePlay.phase==='outbound'?'Tabela: arranque para o espaço':twoOnePlay.phase==='receiveWait'?`Companheiro devolve em ${twoOnePlay.waitTimer.toFixed(1)}s`:'Passe adiantado · receba no pé':visionActive?`Visão ativa: ${player1.powerEffectTimer.toFixed(1)}s`:curveArmed?'Curva armada · mire e chute/passe':shotBuffPending?'Próximo chute fortalecido':player1.dashTimer>0?`Dash: ${player1.dashTimer.toFixed(1)}s`:player1.powerEffectTimer>0?`Efeito: ${player1.powerEffectTimer.toFixed(1)}s`:ready?'Pronto · Q':`Recarga ${player1.powerCooldown.toFixed(1)}s`;
+  document.getElementById('power-status').textContent=snakeTackle?(snakeTackle.phase==='warning'?'Mire com WASD/Setas · bote iminente':snakeTackle.phase==='expand'?'Cobra se expandindo':snakeTackle.phase==='strike'?'Bote em andamento':'Cobra desaparecendo'):twoOneChoosing?`Escolha ${twoOneSelection.target.isTeammate?'companheiro':'alvo'} · F ou clique`:twoOneActive?twoOnePlay.phase==='outbound'?'Toque e Passa: arranque para o espaço':twoOnePlay.phase==='receiveWait'?`Companheiro devolve em ${twoOnePlay.waitTimer.toFixed(1)}s`:'Passe adiantado · receba no pé':visionActive?`Visão ativa: ${player1.powerEffectTimer.toFixed(1)}s`:curveArmed?'Curva armada · mire e chute/passe':shotBuffPending?'Próximo chute fortalecido':player1.dashTimer>0?`Dash: ${player1.dashTimer.toFixed(1)}s`:player1.powerEffectTimer>0?`Efeito: ${player1.powerEffectTimer.toFixed(1)}s`:ready?'Pronto · Q':`Recarga ${player1.powerCooldown.toFixed(1)}s`;
 }
 navRow.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>showFeaturePage(button.dataset.view)));
 document.querySelector('#menu-overlay .menu-card').querySelectorAll('.color-swatch').forEach(swatch=>swatch.addEventListener('click',()=>{playerConfig.color=swatch.dataset.color;player1.color=playerConfig.color;homeMate.color=playerConfig.color;}));
@@ -1912,10 +2396,10 @@ document.getElementById('power-activate').addEventListener('click',()=>applyPowe
 window.addEventListener('keydown',e=>{if(e.code==='KeyQ'&&gameState.running&&!gameState.isGameOver)applyPower(profile.equippedPower,player1);});
 
 function updateTimerDisplay() {
-  const t = Math.max(0, Math.floor(gameState.timeRemaining));
+  const t = Math.max(0, Math.floor(gameState.isOvertime?gameState.overtimeTimeRemaining:gameState.timeRemaining));
   const mins = Math.floor(t / 60).toString().padStart(2, '0');
   const secs = (t % 60).toString().padStart(2, '0');
-  timerEl.textContent = `${mins}:${secs}`;
+  timerEl.textContent = gameState.isOvertime?`GOL DE OURO · ${mins}:${secs}`:`${mins}:${secs}`;
 }
 
 /* ==========================================================================
@@ -2019,6 +2503,63 @@ function drawVisionPuzzleOverlay(renderCtx) {
   renderCtx.restore();
 }
 
+function drawTwoVtwoVisionGuidance(renderCtx) {
+  if(gameMode!=='2v2'||player1.powerEffect!=='vision'||player1.powerEffectTimer<=0)return;
+  renderCtx.save();renderCtx.lineCap='round';renderCtx.setLineDash([5,5]);
+  const pulse=.62+Math.sin(performance.now()/130)*.16;
+  renderCtx.globalAlpha=pulse;renderCtx.strokeStyle='#baf4ff';renderCtx.lineWidth=2;
+  renderCtx.beginPath();renderCtx.arc(homeMate.x,homeMate.y,homeMate.radius+11,0,Math.PI*2);renderCtx.stroke();
+  const p=CONFIG.pitch,ideas=[{x:1,y:-.65},{x:1,y:.65},{x:.65,y:-1},{x:.65,y:1}];
+  for(const idea of ideas){
+    const length=Math.hypot(idea.x,idea.y),x=homeMate.x+idea.x/length*90,y=homeMate.y+idea.y/length*90;
+    if(x<p.left+25||x>p.right-25||y<p.top+25||y>p.bottom-25)continue;
+    const nearest=Math.min(Math.hypot(x-player2.x,y-player2.y),Math.hypot(x-awayMate.x,y-awayMate.y));
+    if(nearest<42)continue;
+    renderCtx.globalAlpha=.22+Math.min(.24,nearest/500);renderCtx.beginPath();renderCtx.arc(x,y,9,0,Math.PI*2);renderCtx.stroke();
+  }
+  renderCtx.setLineDash([]);
+  if(visionPassRoute){
+    const alpha=Math.min(1,visionPassRoute.timer/visionPassRoute.maxTimer);
+    renderCtx.globalAlpha=alpha*.68;renderCtx.strokeStyle='#c8f7ff';renderCtx.lineWidth=3;
+    renderCtx.beginPath();renderCtx.moveTo(visionPassRoute.from.x,visionPassRoute.from.y);renderCtx.lineTo(visionPassRoute.to.x,visionPassRoute.to.y);renderCtx.stroke();
+    const count=5;
+    for(let i=1;i<count;i++){
+      const t=i/count,x=visionPassRoute.from.x+(visionPassRoute.to.x-visionPassRoute.from.x)*t,y=visionPassRoute.from.y+(visionPassRoute.to.y-visionPassRoute.from.y)*t;
+      renderCtx.beginPath();renderCtx.arc(x,y,4.5,0,Math.PI*2);renderCtx.fillStyle='#e3fbff';renderCtx.fill();
+      renderCtx.beginPath();renderCtx.arc(x,y,7.5,0,Math.PI*2);renderCtx.strokeStyle='#9eeaff';renderCtx.lineWidth=1;renderCtx.stroke();
+    }
+  }
+  renderCtx.restore();
+}
+
+function drawSnakeTackles(renderCtx){
+  for(const tackle of snakeTackles){
+    const actor=tackle.owner,end=getSnakeTackleEndpoint(tackle),angle=Math.atan2(tackle.dirY,tackle.dirX);
+    renderCtx.save();renderCtx.lineCap='round';renderCtx.lineJoin='round';
+    if(tackle.phase==='warning'){
+      const pulse=.42+Math.sin(performance.now()/55)*.12;
+      renderCtx.globalAlpha=pulse;renderCtx.strokeStyle='#facc15';renderCtx.fillStyle='#fde68a';renderCtx.lineWidth=3;renderCtx.setLineDash([8,7]);
+      renderCtx.beginPath();renderCtx.moveTo(actor.x+tackle.dirX*(actor.radius+5),actor.y+tackle.dirY*(actor.radius+5));renderCtx.lineTo(end.x,end.y);renderCtx.stroke();renderCtx.setLineDash([]);
+      renderCtx.beginPath();renderCtx.arc(end.x,end.y,8,0,Math.PI*2);renderCtx.stroke();
+      const sideX=-tackle.dirY,sideY=tackle.dirX;
+      renderCtx.beginPath();renderCtx.moveTo(end.x,end.y);renderCtx.lineTo(end.x-tackle.dirX*14+sideX*7,end.y-tackle.dirY*14+sideY*7);renderCtx.lineTo(end.x-tackle.dirX*14-sideX*7,end.y-tackle.dirY*14-sideY*7);renderCtx.closePath();renderCtx.fill();
+    }
+    if(snakeSpriteCanvas){
+      const progress=1-tackle.timer/tackle.phaseDuration;
+      const frameIndex=tackle.phase==='warning'?0:tackle.phase==='expand'?1:tackle.phase==='strike'?2:3;
+      const frame=snakeAtlasFrames[frameIndex];
+      const length=tackle.phase==='warning'?42:tackle.phase==='expand'?58+progress*106:tackle.phase==='strike'?164:132;
+      const height=tackle.phase==='warning'?28:tackle.phase==='expand'?34+progress*28:tackle.phase==='strike'?66:78;
+      renderCtx.globalAlpha=tackle.phase==='fade'?Math.max(0,tackle.timer/tackle.phaseDuration)*.78:.82;
+      if(tackle.phase==='fade')renderCtx.translate(end.x-tackle.dirX*38,end.y-tackle.dirY*38);
+      else renderCtx.translate(actor.x+tackle.dirX*(actor.radius*.35),actor.y+tackle.dirY*(actor.radius*.35));
+      renderCtx.rotate(angle);
+      renderCtx.drawImage(snakeSpriteCanvas,frame.x,frame.y,frame.w,frame.h,0,-height/2,length,height);
+    }
+    renderCtx.restore();
+  }
+}
+
 function drawTwoOneVisuals(renderCtx){
   if(!twoOneSelection&&!twoOnePlay&&twoOneImpactTimer<=0)return;
   renderCtx.save();renderCtx.lineCap='round';renderCtx.lineJoin='round';
@@ -2104,12 +2645,16 @@ function physicsStep(dt) {
   if(gameMode==='training'){
     // Treino livre sem cronômetro, gols ou fim de partida.
   } else if (!gameState.pausedForGoal) {
-    gameState.timeRemaining -= dt;
-    if (gameState.timeRemaining <= 0) {
-      gameState.timeRemaining = 0;
-      updateTimerDisplay();
-      endGame('time_out');
-      return;
+    if(gameMode==='2v2'&&gameState.isOvertime){
+      gameState.overtimeTimeRemaining-=dt;
+      if(gameState.overtimeTimeRemaining<=0){gameState.overtimeTimeRemaining=0;updateTimerDisplay();endGame('time_out');return;}
+    } else {
+      gameState.timeRemaining -= dt;
+      if (gameState.timeRemaining <= 0) {
+        gameState.timeRemaining = 0;updateTimerDisplay();
+        if(gameMode==='2v2'&&gameState.scoreP1===gameState.scoreP2){beginGoldenGoal();return;}
+        endGame('time_out');return;
+      }
     }
     updateTimerDisplay();
   } else {
@@ -2123,10 +2668,10 @@ function physicsStep(dt) {
   // 2. Entrada do Jogador Humano
   let moveX = 0;
   let moveY = 0;
-  if (input.left) moveX -= 1;
-  if (input.right) moveX += 1;
-  if (input.up) moveY -= 1;
-  if (input.down) moveY += 1;
+  if (!twoOnePlay&&input.left) moveX -= 1;
+  if (!twoOnePlay&&input.right) moveX += 1;
+  if (!twoOnePlay&&input.up) moveY -= 1;
+  if (!twoOnePlay&&input.down) moveY += 1;
 
   if (moveX !== 0 && moveY !== 0) {
     const inv = 1 / Math.SQRT2;
@@ -2135,7 +2680,8 @@ function physicsStep(dt) {
   }
   const moveLength=Math.hypot(moveX,moveY);
   if(moveLength>0.1){player1.facingX=moveX/moveLength;player1.facingY=moveY/moveLength;}
-  if (gameMode!=='training'&&player1.powerEffect === 'shadow') { const dx=player2.x-player1.x,dy=player2.y-player1.y,d=Math.hypot(dx,dy)||1;moveX+=dx/d*.3;moveY+=dy/d*.3; }
+  if(!gameState.pausedForGoal)updateSnakeTackles(dt,moveX,moveY);
+  if (gameMode!=='training'&&player1.powerEffect === 'shadow') { const marker=gameMode==='2v2'&&Math.hypot(awayMate.x-player1.x,awayMate.y-player1.y)<Math.hypot(player2.x-player1.x,player2.y-player1.y)?awayMate:player2,dx=marker.x-player1.x,dy=marker.y-player1.y,d=Math.hypot(dx,dy)||1;moveX+=dx/d*.3;moveY+=dy/d*.3; }
 
   if (!gameState.pausedForGoal) {
     player1.vx += moveX * CONFIG.physics.playerAcceleration;
@@ -2143,78 +2689,93 @@ function physicsStep(dt) {
 
     if(input.passRequested){
       input.passRequested=false;
-      if(twoOneSelection)confirmTwoOneSelection();
+      if(twoOnePlay){}
+      else if(twoOneSelection)confirmTwoOneSelection();
       else {
-        const visionActive=profile.equippedPower==='vision'&&player1.powerEffect==='vision'&&player1.powerEffectTimer>0;
         const teammate=nearestPassTeammate(player1),teammateDistance=teammate?Math.hypot(teammate.x-player1.x,teammate.y-player1.y):Infinity;
         if(!teammate||teammateDistance>320)showPowerFeedback('Nenhum aliado próximo para receber o passe',true);
         else if(isVisionPassLaneBlocked())showPowerFeedback('Linha de passe bloqueada',true);
         else {
           const passed=player1.tryKick(ball,moveX,moveY,true,teammate);
           if(!passed)showPowerFeedback(player1.kickCooldownTimer>0?'Aguarde para passar':'Chegue perto da bola para passar',true);
-          if(passed&&visionActive){ball.visionPassAssistTimer=1.5;ball.visionPassAssistEnabled=Math.random()<0.78;}
         }
       }
-    } else if(input.kickRequested)player1.tryKick(ball,moveX,moveY);
+    } else if(input.kickRequested&&!twoOnePlay)player1.tryKick(ball,moveX,moveY);
 
     // 3. IA do companheiro e do adversário
-    if(gameMode!=='training'){updateHomeMateAI(dt);updateAI(dt);}
+    if(gameMode==='2v2'){
+      updatePowerBot(dt,homeMate);updateHomeMateAI(dt);updateAI(dt);updateAwayMateAI(dt);
+    } else if(gameMode==='match')updateAI(dt);
     else if(twoOnePlay?.target===homeMate)updateHomeMateAI(dt);
   }
 
   // 4. Atualização cinemática
   if(twoOnePlay&&twoOnePlay.runTimer>0){const d=twoOnePlay.runDirection;player1.vx+=d.x*CONFIG.physics.playerAcceleration*1.8;player1.vy+=d.y*CONFIG.physics.playerAcceleration*1.8;player1.twoOneRunTimer=twoOnePlay.runTimer;twoOnePlay.runTimer=Math.max(0,twoOnePlay.runTimer-dt);}
   player1.update(dt);
-  homeMate.update(dt);
-  if(gameMode!=='training')player2.update(dt);
+  if(gameMode==='training'||gameMode==='2v2')homeMate.update(dt);
+  player2.update(dt);if(gameMode==='training')pinTrainingDummy();
+  if(gameMode==='2v2')awayMate.update(dt);
   updatePlayerDribbleControl(player1);
-  updatePlayerDribbleControl(homeMate);
+  if(gameMode==='training'||gameMode==='2v2')updatePlayerDribbleControl(homeMate);
   if(gameMode!=='training')updatePlayerDribbleControl(player2);
+  if(gameMode==='2v2')updatePlayerDribbleControl(awayMate);
   updatePhantomBallCarry(player1,dt);
   if(gameMode!=='training')updatePhantomBallCarry(player2,dt);
+  if(gameMode==='2v2'){updatePhantomBallCarry(homeMate,dt);updatePhantomBallCarry(awayMate,dt);}
   updateVisionPassAssist(dt);
   updateTwoOneReturnAssist(dt);
   if(player1.dashTimer>0)addLightningTrail(player1);
+  if(gameMode==='2v2'){if(homeMate.dashTimer>0)addLightningTrail(homeMate);if(player2.dashTimer>0)addLightningTrail(player2);if(awayMate.dashTimer>0)addLightningTrail(awayMate);}
   if(player1.powerEffect==='phantom'&&player1.powerEffectTimer>0&&player1.ghostTrailTimer<=0){addPhantomShadow(player1);player1.ghostTrailTimer=0.055;}
   ball.update();
 
   // 5. Resolução de Colisões
-  if(gameMode!=='training')resolveCircleCollision(player1, player2, CONFIG.physics.restitutionPlayer);
-  resolveCircleCollision(player1, homeMate, CONFIG.physics.restitutionPlayer);
-  if(gameMode!=='training')resolveCircleCollision(player2, homeMate, CONFIG.physics.restitutionPlayer);
+  resolveCircleCollision(player1, player2, CONFIG.physics.restitutionPlayer);
+  if(gameMode==='training'||gameMode==='2v2')resolveCircleCollision(player1, homeMate, CONFIG.physics.restitutionPlayer);
+  if(gameMode==='2v2'){
+    resolveCircleCollision(player1,awayMate,CONFIG.physics.restitutionPlayer);
+    resolveCircleCollision(player2,homeMate,CONFIG.physics.restitutionPlayer);
+    resolveCircleCollision(player2,awayMate,CONFIG.physics.restitutionPlayer);
+    resolveCircleCollision(homeMate,awayMate,CONFIG.physics.restitutionPlayer);
+  }
+  if(gameMode==='training'){pinTrainingDummy();updateTrainingDummyBall();}
 
   // Colisão da bola com os jogadores (respeita imunidade anti-ricochete do chute)
   if (player1.ignoreBallCollisionFrames <= 0) {
-    if(!phantomEvadesBote(player2,player1))resolveCircleCollision(player1, ball, CONFIG.physics.restitutionBall);
+    if(shouldBallContact(player1,[player2,...(gameMode==='2v2'?[awayMate]:[])]))resolveCircleCollision(player1, ball, CONFIG.physics.restitutionBall);
   }
-  if (gameMode!=='training'&&player2.ignoreBallCollisionFrames <= 0) {
-    if(!phantomEvadesBote(player1,player2))resolveCircleCollision(player2, ball, CONFIG.physics.restitutionBall);
+  if (player2.ignoreBallCollisionFrames <= 0) {
+    if(shouldBallContact(player2,[player1,...(gameMode==='2v2'?[homeMate]:[])]))resolveCircleCollision(player2, ball, CONFIG.physics.restitutionBall);
   }
-  resolveCircleCollision(homeMate,ball,CONFIG.physics.restitutionBall);
+  if((gameMode==='training'||gameMode==='2v2')&&homeMate.ignoreBallCollisionFrames<=0&&shouldBallContact(homeMate,[player2,...(gameMode==='2v2'?[awayMate]:[])]))resolveCircleCollision(homeMate,ball,CONFIG.physics.restitutionBall);
+  if(gameMode==='2v2'&&awayMate.ignoreBallCollisionFrames<=0&&shouldBallContact(awayMate,[player1,homeMate]))resolveCircleCollision(awayMate,ball,CONFIG.physics.restitutionBall);
 
   // Postes
   for (let i = 0; i < posts.length; i++) {
     resolveCirclePostCollision(ball, posts[i], CONFIG.physics.restitutionWall);
     resolveCirclePostCollision(player1, posts[i], 0.35);
-    resolveCirclePostCollision(homeMate, posts[i], 0.35);
-    if(gameMode!=='training')resolveCirclePostCollision(player2, posts[i], 0.35);
+    if(gameMode==='training'||gameMode==='2v2')resolveCirclePostCollision(homeMate, posts[i], 0.35);
+    resolveCirclePostCollision(player2, posts[i], 0.35);
+    if(gameMode==='2v2')resolveCirclePostCollision(awayMate,posts[i],0.35);
   }
 
   // Paredes externas das traves para jogadores
   for (let i = 0; i < netSegmentsForPlayers.length; i++) {
     const seg = netSegmentsForPlayers[i];
     resolveCircleSegment(player1, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
-    resolveCircleSegment(homeMate, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
-    if(gameMode!=='training')resolveCircleSegment(player2, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
+    if(gameMode==='training'||gameMode==='2v2')resolveCircleSegment(homeMate, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
+    resolveCircleSegment(player2, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
+    if(gameMode==='2v2')resolveCircleSegment(awayMate,seg.x1,seg.y1,seg.x2,seg.y2,.2);
   }
 
   // Paredes e redes para a bola
   resolveBallBoundaries(ball);
   updateTwoOneState(dt);
+  updateTwoVtwoPassProgress(dt);
 
   // 6. Verificação de Gol
   if(gameMode==='training'){
-    const p=CONFIG.pitch,speed=Math.hypot(ball.vx,ball.vy),tooFar=Math.hypot(ball.x-player1.x,ball.y-player1.y)>360&&Math.hypot(ball.x-homeMate.x,ball.y-homeMate.y)>300;
+    const p=CONFIG.pitch,speed=Math.hypot(ball.vx,ball.vy),tooFar=Math.hypot(ball.x-player1.x,ball.y-player1.y)>360&&Math.hypot(ball.x-homeMate.x,ball.y-homeMate.y)>300&&Math.hypot(ball.x-player2.x,ball.y-player2.y)>300;
     if(ball.x<p.left||ball.x>p.right||ball.y<p.top||ball.y>p.bottom||(speed<0.18&&tooFar))ball.reset(p.centerX,p.centerY);
   } else checkGoal();
 }
@@ -2240,16 +2801,19 @@ function gameLoop(timestamp) {
   ctx.clearRect(0, 0, CONFIG.canvasWidth, CONFIG.canvasHeight);
   drawPitch(ctx);
   drawVisionPuzzleOverlay(ctx);
+  drawTwoVtwoVisionGuidance(ctx);
 
   for (let i = 0; i < posts.length; i++) posts[i].draw(ctx);
   updateAndDrawParticles(ctx);
   updateAndDrawPhantomShadows(ctx);
   updateAndDrawLightningTrails(ctx);
+  drawSnakeTackles(ctx);
   drawTwoOneVisuals(ctx);
   ball.draw(ctx);
   player1.draw(ctx);
-  homeMate.draw(ctx);
-  if(gameMode!=='training')player2.draw(ctx);
+  if(gameMode==='training'||gameMode==='2v2')homeMate.draw(ctx);
+  player2.draw(ctx);
+  if(gameMode==='2v2')awayMate.draw(ctx);
   updatePowerHud();
 
   requestAnimationFrame(gameLoop);
@@ -2300,7 +2864,7 @@ startBtn.addEventListener('click', () => {
   menuWasRunning=false;
   const resumeButton=document.getElementById('menu-resume'); if(resumeButton) resumeButton.remove();
   menuOverlay.classList.add('hidden');
-  startFreshMatch();
+  startFreshMatch('match');
   document.getElementById('power-hud').classList.toggle('hidden',!profile.equippedPower);
   if (!gameState.running) {
     gameState.running = true;
@@ -2309,9 +2873,18 @@ startBtn.addEventListener('click', () => {
   }
 });
 
+const twoVtwoStartBtn=document.createElement('button');
+twoVtwoStartBtn.id='start-2v2-btn';twoVtwoStartBtn.className='secondary-btn two-v-two-mode-btn';twoVtwoStartBtn.textContent='2V2 — Duplas contra Duplas';
+startBtn.after(twoVtwoStartBtn);
+twoVtwoStartBtn.addEventListener('click',()=>{
+  Sound.init();menuWasRunning=false;const resumeButton=document.getElementById('menu-resume');if(resumeButton)resumeButton.remove();
+  menuOverlay.classList.add('hidden');startFreshMatch('2v2');document.getElementById('power-hud').classList.toggle('hidden',!profile.equippedPower);
+  gameState.running=true;gameState.lastTimestamp=performance.now();requestAnimationFrame(gameLoop);
+});
+
 playAgainBtn.addEventListener('click', () => {
   Sound.init();
-  startFreshMatch();
+  startFreshMatch(gameMode==='2v2'?'2v2':'match');
   document.getElementById('power-hud').classList.toggle('hidden',!profile.equippedPower);
   if (!gameState.running) {
     gameState.running = true;
@@ -2331,7 +2904,7 @@ btnMenu.addEventListener('click', () => {
 });
 
 btnRestart.addEventListener('click', () => {
-  if(gameMode==='training')resetTraining();else startFreshMatch();
+  if(gameMode==='training')resetTraining();else startFreshMatch(gameMode==='2v2'?'2v2':'match');
 });
 
 // Listener do botão "Voltar ao Menu" na tela de Game Over
@@ -2351,6 +2924,5 @@ drawPitch(ctx);
 for (let i = 0; i < posts.length; i++) posts[i].draw(ctx);
 ball.draw(ctx);
 player1.draw(ctx);
-homeMate.draw(ctx);
 player2.draw(ctx);
 updateCoinUI();
