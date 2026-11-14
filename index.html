@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Litoball - Futebol de Botão 2D Arcade</title>
+  <!-- Estilos Modulares -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="game-container">
+    <!-- Placar e HUD Superior -->
+    <div id="hud">
+      <div class="hud-team">
+        <div id="badge-p1" class="team-badge" style="background-color: #2b70f6;"></div>
+        <span id="name-p1">Você</span>
+        <!-- Indicador de Saldo de Moedas no HUD -->
+        <div class="hud-coins-pill" title="Seu saldo de Lito Coins">
+          <span class="coin-icon">🪙</span>
+          <span id="hud-coin-count">50</span>
+        </div>
+      </div>
+
+      <div id="hud-score-center">
+        <div id="hud-score"><span id="score-p1">0</span> &times; <span id="score-p2">0</span></div>
+        <div id="hud-timer">03:00</div>
+        <strong id="hud-training-label" hidden>Treino livre</strong>
+      </div>
+
+      <div class="hud-team">
+        <span id="name-p2">Bot Vermelho</span>
+        <div class="team-badge" style="background-color: #e53935;"></div>
+        <div class="hud-controls-hint">
+          <button id="btn-pass" class="hud-btn" title="Passe especial (F), durante Visão de Campo ou Curva Impossível" hidden>Passe especial</button>
+          <button id="btn-menu" class="hud-btn" title="Configurações">Menu</button>
+          <button id="btn-restart" class="hud-btn" title="Reiniciar Partida">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Anúncio de Gol -->
+    <div id="goal-banner">GOOOOL!</div>
+
+    <!-- Canvas Principal do Jogo -->
+    <canvas id="gameCanvas" width="1000" height="600"></canvas>
+
+    <!-- HUD do poder equipado durante a partida -->
+    <div id="power-hud" class="power-hud hidden">
+      <button id="power-activate" class="power-activate" title="Ativar poder (Q)" aria-label="Ativar poder (Q)">⚡</button>
+      <div>
+        <strong id="power-name">Sem poder</strong>
+        <div class="power-meter"><span id="power-meter-fill"></span></div>
+        <small id="power-status">Equipe um poder no inventário</small>
+      </div>
+    </div>
+    <div id="power-toast" class="power-toast" role="status" aria-live="polite"></div>
+
+    <!-- Modal de Fim de Jogo (Game Over) -->
+    <div id="game-over-overlay" class="modal-overlay hidden">
+      <div class="menu-card">
+        <h2 id="game-over-title">FIM DE PARTIDA</h2>
+        <p id="game-over-reason">Resultado Final</p>
+
+        <div class="final-score-display">
+          <div class="final-team-col">
+            <div id="final-badge-p1" class="team-badge" style="background-color: #2b70f6;"></div>
+            <span class="final-team-name">Você</span>
+            <span id="final-score-p1" class="final-score-num">0</span>
+          </div>
+
+          <div class="final-score-divider">&times;</div>
+
+          <div class="final-team-col">
+            <div class="team-badge" style="background-color: #e53935;"></div>
+            <span class="final-team-name">Bot</span>
+            <span id="final-score-p2" class="final-score-num">0</span>
+          </div>
+        </div>
+
+        <!-- Resumo Detalhado de Recompensas da Partida -->
+        <div class="gameover-rewards-card">
+          <div class="rewards-header">
+            <span>RECOMPENSAS DA PARTIDA</span>
+            <span class="rewards-icon">🪙</span>
+          </div>
+
+          <div class="reward-row">
+            <span id="reward-result-label">Resultado:</span>
+            <span id="reward-result-val" class="reward-val">+0 🪙</span>
+          </div>
+
+          <div class="reward-row">
+            <span id="reward-goals-label">Gols Marcados:</span>
+            <span id="reward-goals-val" class="reward-val">+0 🪙</span>
+          </div>
+
+          <div class="reward-row total-row">
+            <span>Total Ganho:</span>
+            <span id="reward-total-val" class="reward-val highlight">+0 🪙</span>
+          </div>
+
+          <div class="reward-balance-sub">
+            Saldo Atualizado: <strong id="reward-new-balance">🪙 50</strong>
+          </div>
+        </div>
+
+        <div class="gameover-actions">
+          <button id="play-again-btn" class="primary-btn">JOGAR NOVAMENTE</button>
+          <button id="game-over-menu-btn" class="secondary-btn">MENU PRINCIPAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu Inicial / Customização -->
+    <div id="menu-overlay" class="modal-overlay">
+      <div class="menu-card">
+        <h1 class="menu-title">Litoball</h1>
+        <p class="menu-subtitle">Futebol de Botão 2D &bull; Primeiro a 5 Gols ou 3 Minutos</p>
+
+        <!-- Indicador de Saldo de Moedas no Menu -->
+        <div class="menu-coins-badge" title="Saldo de Lito Coins">
+          <span>🪙</span> <span id="menu-coin-count">50</span> Lito Coins
+        </div>
+
+        <!-- Preview do Botão -->
+        <div class="preview-container">
+          <canvas id="player-preview-canvas" width="120" height="120"></canvas>
+        </div>
+
+        <!-- Seletor de Cores -->
+        <div class="menu-group">
+          <label class="menu-label">Cor do seu Botão</label>
+          <div class="color-presets">
+            <div class="color-swatch active" data-color="#2b70f6" style="background: #2b70f6;"></div>
+            <div class="color-swatch" data-color="#10b981" style="background: #10b981;"></div>
+            <div class="color-swatch" data-color="#f59e0b" style="background: #f59e0b;"></div>
+            <div class="color-swatch" data-color="#8b5cf6" style="background: #8b5cf6;"></div>
+            <div class="color-swatch" data-color="#06b6d4" style="background: #06b6d4;"></div>
+            <div class="color-swatch" data-color="#ec4899" style="background: #ec4899;"></div>
+            <div class="custom-color-wrapper" title="Escolher cor personalizada">
+              <input type="color" id="custom-color-input" value="#2b70f6">
+            </div>
+          </div>
+        </div>
+
+        <!-- Número da Camisa -->
+        <div class="menu-group">
+          <label class="menu-label" for="jersey-number-input">Número da Camisa</label>
+          <div class="number-input-row">
+            <input type="number" id="jersey-number-input" min="1" max="99" value="10">
+            <span class="number-hint">Número de 1 a 99</span>
+          </div>
+        </div>
+
+        <!-- Botão Iniciar -->
+        <button id="start-btn" class="primary-btn">JOGAR PARTIDA</button>
+
+        <!-- Instruções de Controles -->
+        <div class="controls-card">
+          Movimentação: <span class="key-badge">W</span><span class="key-badge">A</span><span class="key-badge">S</span><span class="key-badge">D</span> ou <span class="key-badge">&uarr;</span><span class="key-badge">&larr;</span><span class="key-badge">&darr;</span><span class="key-badge">&rarr;</span><br>
+          Chute: <span class="key-badge">ESPAÇO</span> ou <span class="key-badge">CLIQUE</span> · Passe especial: <span class="key-badge">F</span> ou botão durante Visão de Campo ou Curva Impossível<br>
+          Ativar Poder: <span class="key-badge">Q</span> ou botão ⚡ durante a partida
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lógica Principal do Jogo -->
+  <script src="script.js"></script>
+</body>
+</html>
