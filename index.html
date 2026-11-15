@@ -4,20 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Litoball - Futebol de Botão 2D Arcade</title>
-  <!-- Estilos Modulares -->
   <link rel="stylesheet" href="style.css">
+  <script defer src="js/config.js"></script>
+  <script defer src="js/storage.js"></script>
+  <script defer src="js/assets-audio.js"></script>
+  <script defer src="js/entities.js"></script>
+  <script defer src="js/physics.js"></script>
+  <script defer src="js/skills/snakeTackle.js"></script>
+  <script defer src="js/skills/curveShot.js"></script>
+  <script defer src="js/skills/powers.js"></script>
+  <script defer src="js/ai.js"></script>
+  <script defer src="js/ui/menus.js"></script>
+  <script defer src="js/main.js"></script>
 </head>
 <body>
 
-  <div id="game-container">
+  <div id="fullscreen-stage">
+  <main id="game-container">
     <!-- Placar e HUD Superior -->
-    <div id="hud">
+    <header id="hud">
       <div class="hud-team">
         <div id="badge-p1" class="team-badge" style="background-color: #2b70f6;"></div>
         <span id="name-p1">Você</span>
-        <!-- Indicador de Saldo de Moedas no HUD -->
         <div class="hud-coins-pill" title="Seu saldo de Lito Coins">
-          <span class="coin-icon">🪙</span>
+          <span class="coin-icon" aria-hidden="true">🪙</span>
           <span id="hud-coin-count">50</span>
         </div>
       </div>
@@ -28,27 +38,34 @@
         <strong id="hud-training-label" hidden>Treino livre</strong>
       </div>
 
-      <div class="hud-team">
+      <div class="hud-team hud-team-right">
         <span id="name-p2">Bot Vermelho</span>
         <div class="team-badge" style="background-color: #e53935;"></div>
         <div class="hud-controls-hint">
-          <button id="btn-pass" class="hud-btn" title="Passe especial (F), durante Visão de Campo ou Curva Impossível" hidden>Passe especial</button>
-          <button id="btn-menu" class="hud-btn" title="Configurações">Menu</button>
-          <button id="btn-restart" class="hud-btn" title="Reiniciar Partida">Reset</button>
+          <button id="btn-pass" type="button" class="hud-btn" title="Passe especial (F)" hidden>Passe (F)</button>
+          <button id="btn-fullscreen" type="button" class="hud-btn" title="Alternar Tela Cheia">⛶ Tela</button>
+          <button id="btn-menu" type="button" class="hud-btn" title="Menu Principal">Menu</button>
+          <button id="btn-restart" type="button" class="hud-btn" title="Reiniciar Partida">Reset</button>
         </div>
       </div>
-    </div>
+    </header>
 
     <!-- Anúncio de Gol -->
-    <div id="goal-banner">GOOOOL!</div>
+    <div id="goal-banner" aria-live="polite">GOOOOL!</div>
+
+    <!-- Contagem Regressiva de Início da Partida -->
+    <div id="countdown-overlay" class="countdown-overlay hidden" role="status" aria-live="assertive">
+      <span id="countdown-value">3</span>
+      <small id="countdown-sub">Prepare-se!</small>
+    </div>
 
     <!-- Canvas Principal do Jogo -->
     <canvas id="gameCanvas" width="1000" height="600"></canvas>
 
     <!-- HUD do poder equipado durante a partida -->
     <div id="power-hud" class="power-hud hidden">
-      <button id="power-activate" class="power-activate" title="Ativar poder (Q)" aria-label="Ativar poder (Q)">⚡</button>
-      <div>
+      <button id="power-activate" type="button" class="power-activate" title="Ativar poder (Q)" aria-label="Ativar poder (Q)">⚡</button>
+      <div class="power-hud-info">
         <strong id="power-name">Sem poder</strong>
         <div class="power-meter"><span id="power-meter-fill"></span></div>
         <small id="power-status">Equipe um poder no inventário</small>
@@ -57,8 +74,9 @@
     <div id="power-toast" class="power-toast" role="status" aria-live="polite"></div>
 
     <!-- Modal de Fim de Jogo (Game Over) -->
-    <div id="game-over-overlay" class="modal-overlay hidden">
-      <div class="menu-card">
+    <section id="game-over-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+      <div class="menu-card gameover-card">
+        <span class="arcade-pill">Resultado Oficial</span>
         <h2 id="game-over-title">FIM DE PARTIDA</h2>
         <p id="game-over-reason">Resultado Final</p>
 
@@ -78,11 +96,10 @@
           </div>
         </div>
 
-        <!-- Resumo Detalhado de Recompensas da Partida -->
         <div class="gameover-rewards-card">
           <div class="rewards-header">
-            <span>RECOMPENSAS DA PARTIDA</span>
-            <span class="rewards-icon">🪙</span>
+            <span>Recompensas da Partida</span>
+            <span class="rewards-icon" aria-hidden="true">🪙</span>
           </div>
 
           <div class="reward-row">
@@ -119,67 +136,206 @@
         </div>
 
         <div class="gameover-actions">
-          <button id="play-again-btn" class="primary-btn">JOGAR NOVAMENTE</button>
-          <button id="game-over-menu-btn" class="secondary-btn">MENU PRINCIPAL</button>
+          <button id="play-again-btn" type="button" class="primary-btn">Jogar Novamente</button>
+          <button id="game-over-menu-btn" type="button" class="secondary-btn">Menu Principal</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Menu Inicial / Customização -->
-    <div id="menu-overlay" class="modal-overlay">
-      <div class="menu-card">
-        <h1 class="menu-title">Litoball</h1>
-        <p class="menu-subtitle">Futebol de Botão 2D &bull; 1v1 e 2V2 em duplas</p>
+    <!-- Menu Inicial e Telas Modulares -->
+    <section id="menu-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="main-menu-title">
+      <!-- Fundo Imersivo: Mesa Tática Holográfica de Futebol de Botão -->
+      <svg class="cyber-pitch-bg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <radialGradient id="cyberTableGlow" cx="50%" cy="48%" r="62%">
+            <stop offset="0%" stop-color="#0b2848" stop-opacity="0.88" />
+            <stop offset="55%" stop-color="#061428" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#030712" stop-opacity="1" />
+          </radialGradient>
+          <pattern id="cyberHexGrid" width="36" height="36" patternUnits="userSpaceOnUse">
+            <path d="M 36 0 L 0 0 0 36" fill="none" stroke="rgba(56, 189, 248, 0.08)" stroke-width="1" />
+          </pattern>
+          <filter id="neonCyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="neonRedGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <rect width="1000" height="600" fill="url(#cyberTableGlow)" />
+        <rect width="1000" height="600" fill="url(#cyberHexGrid)" />
+        <!-- Moldura metálica externa -->
+        <rect x="26" y="24" width="948" height="552" rx="22" fill="none" stroke="rgba(148, 163, 184, 0.22)" stroke-width="8" />
+        <rect x="38" y="36" width="924" height="528" rx="14" fill="none" stroke="rgba(56, 189, 248, 0.45)" stroke-width="2" filter="url(#neonCyanGlow)" />
+        <!-- Linhas do campo em neon ciano -->
+        <g stroke="#38bdf8" stroke-opacity="0.52" stroke-width="2.4" fill="none" filter="url(#neonCyanGlow)">
+          <line x1="500" y1="36" x2="500" y2="564" />
+          <circle cx="500" cy="300" r="88" />
+          <circle cx="500" cy="300" r="5" fill="#7dd3fc" />
+          <!-- Áreas e Gols -->
+          <rect x="38" y="150" width="136" height="300" />
+          <rect x="826" y="150" width="136" height="300" />
+          <rect x="38" y="220" width="52" height="160" />
+          <rect x="910" y="220" width="52" height="160" />
+          <path d="M 38 66 A 30 30 0 0 0 68 36" />
+          <path d="M 932 36 A 30 30 0 0 0 962 66" />
+          <path d="M 38 534 A 30 30 0 0 1 68 564" />
+          <path d="M 932 564 A 30 30 0 0 1 962 534" />
+        </g>
+        <!-- Peças / Botões Holográficos posicionados na mesa -->
+        <g opacity="0.72" filter="url(#neonCyanGlow)">
+          <circle cx="155" cy="158" r="24" fill="rgba(14, 165, 233, 0.22)" stroke="#38bdf8" stroke-width="3" />
+          <circle cx="155" cy="158" r="14" fill="none" stroke="#bae6fd" stroke-width="1.5" stroke-dasharray="6 4" />
+          <circle cx="245" cy="455" r="26" fill="rgba(37, 99, 235, 0.24)" stroke="#60a5fa" stroke-width="3" />
+          <circle cx="245" cy="455" r="15" fill="none" stroke="#bfdbfe" stroke-width="1.5" />
+        </g>
+        <g opacity="0.68" filter="url(#neonRedGlow)">
+          <circle cx="845" cy="175" r="24" fill="rgba(244, 63, 94, 0.22)" stroke="#fb7185" stroke-width="3" />
+          <circle cx="845" cy="175" r="14" fill="none" stroke="#fecdd3" stroke-width="1.5" stroke-dasharray="6 4" />
+          <circle cx="775" cy="450" r="25" fill="rgba(239, 68, 68, 0.22)" stroke="#f87171" stroke-width="3" />
+          <circle cx="775" cy="450" r="15" fill="none" stroke="#fee2e2" stroke-width="1.5" />
+        </g>
+        <circle cx="500" cy="300" r="11" fill="#e0f2fe" stroke="#38bdf8" stroke-width="2" opacity="0.78" filter="url(#neonCyanGlow)" />
+      </svg>
 
-        <!-- Indicador de Saldo de Moedas no Menu -->
-        <div class="menu-coins-badge" title="Saldo de Lito Coins">
-          <span>🪙</span> <span id="menu-coin-count">50</span> Lito Coins
-        </div>
-
-        <!-- Preview do Botão -->
-        <div class="preview-container">
-          <canvas id="player-preview-canvas" width="120" height="120"></canvas>
-        </div>
-
-        <!-- Seletor de Cores -->
-        <div class="menu-group">
-          <label class="menu-label">Cor do seu Botão</label>
-          <div class="color-presets">
-            <div class="color-swatch active" data-color="#2b70f6" style="background: #2b70f6;"></div>
-            <div class="color-swatch" data-color="#10b981" style="background: #10b981;"></div>
-            <div class="color-swatch" data-color="#f59e0b" style="background: #f59e0b;"></div>
-            <div class="color-swatch" data-color="#8b5cf6" style="background: #8b5cf6;"></div>
-            <div class="color-swatch" data-color="#06b6d4" style="background: #06b6d4;"></div>
-            <div class="color-swatch" data-color="#ec4899" style="background: #ec4899;"></div>
-            <div class="custom-color-wrapper" title="Escolher cor personalizada">
-              <input type="color" id="custom-color-input" value="#2b70f6">
+      <div class="menu-card menu-card-wide cyber-hud-panel" id="main-menu-card">
+        <div class="cyber-hud-corners" aria-hidden="true"></div>
+        <div class="menu-hero-header">
+          <div class="menu-brand">
+            <span class="arcade-pill">⚡ Futebol Arcade 2D</span>
+            <h1 id="main-menu-title" class="menu-title">LITOBALL</h1>
+            <p class="menu-subtitle">Botão tático em 60 FPS &bull; Duelos 1v1, 2v2 e Habilidades</p>
+          </div>
+          <div class="menu-hero-actions">
+            <button id="menu-fullscreen-btn" type="button" class="hud-btn menu-fs-btn" title="Alternar Tela Cheia">⛶ Tela Cheia</button>
+            <div class="menu-coins-badge" title="Saldo de Lito Coins">
+              <span aria-hidden="true">🪙</span>
+              <span id="menu-coin-count">50</span>
+              <small>Lito Coins</small>
             </div>
           </div>
         </div>
 
-        <!-- Número da Camisa -->
-        <div class="menu-group">
-          <label class="menu-label" for="jersey-number-input">Número da Camisa</label>
-          <div class="number-input-row">
-            <input type="number" id="jersey-number-input" min="1" max="99" value="10">
-            <span class="number-hint">Número de 1 a 99</span>
+        <div id="resume-slot"></div>
+
+        <!-- Seleção Rápida de Modos -->
+        <div class="mode-grid">
+          <button id="start-btn" type="button" class="primary-btn mode-card-btn mode-primary cyber-btn-1v1">
+            <span class="mode-title">⚽ Jogar 1v1</span>
+            <span class="mode-desc">DUELO CLÁSSICO &bull; 3 MIN OU 5 GOLS</span>
+          </button>
+          <button id="start-2v2-btn" type="button" class="secondary-btn mode-card-btn two-v-two-mode-btn cyber-btn-2v2">
+            <span class="mode-title">🤝 Jogar 2v2 — Duplas</span>
+            <span class="mode-desc">Arena ampliada &bull; Tabelas, passes e desafios</span>
+          </button>
+          <button id="start-training-btn" type="button" class="secondary-btn mode-card-btn mode-training cyber-btn-training">
+            <span class="mode-title">🎯 Treino Livre</span>
+            <span class="mode-desc">Pratique domínio, chutes e habilidades sem placar</span>
+          </button>
+        </div>
+
+        <!-- Navegação entre Telas -->
+        <nav class="menu-nav-row" aria-label="Telas do jogo">
+          <button type="button" class="nav-tile-btn" data-view="shop">
+            <span class="nav-icon" aria-hidden="true">🛒</span>
+            <span class="nav-label">Loja</span>
+          </button>
+          <button type="button" class="nav-tile-btn" data-view="inventory">
+            <span class="nav-icon" aria-hidden="true">🎒</span>
+            <span class="nav-label">Inventário</span>
+          </button>
+          <button type="button" class="nav-tile-btn" data-view="options">
+            <span class="nav-icon" aria-hidden="true">⚙️</span>
+            <span class="nav-label">Opções</span>
+          </button>
+          <button type="button" class="nav-tile-btn" data-view="credits">
+            <span class="nav-icon" aria-hidden="true">🏆</span>
+            <span class="nav-label">Créditos</span>
+          </button>
+        </nav>
+
+        <!-- Rodapé de Controles Estilo Circuito (atualizado dinamicamente) -->
+        <div class="controls-card controls-circuit-footer" id="menu-controls-card">
+          <div class="circuit-divider" aria-hidden="true">
+            <span></span><i></i><span></span>
+          </div>
+          <div class="control-hint-grid">
+            <div class="control-hint-item">
+              <span class="control-hint-label">Movimentação</span>
+              <span class="control-hint-keys">
+                <span class="key-badge">W</span><span class="key-badge">A</span><span class="key-badge">S</span><span class="key-badge">D</span>
+                <small>ou</small>
+                <span class="key-badge">&uarr;</span><span class="key-badge">&larr;</span><span class="key-badge">&darr;</span><span class="key-badge">&rarr;</span>
+              </span>
+            </div>
+            <div class="control-hint-item">
+              <span class="control-hint-label">Chute</span>
+              <span class="control-hint-keys"><span id="hint-kick-key" class="key-badge key-badge-accent">ESPAÇO</span> <small>ou</small> <span class="key-badge">CLIQUE</span></span>
+            </div>
+            <div class="control-hint-item">
+              <span class="control-hint-label">Ativar Poder</span>
+              <span class="control-hint-keys"><span id="hint-power-key" class="key-badge key-badge-gold">Q</span> <small>ou</small> <span class="key-badge key-badge-gold">⚡ HUD</span></span>
+            </div>
+            <div class="control-hint-item">
+              <span class="control-hint-label">Passe Especial</span>
+              <span class="control-hint-keys"><span class="key-badge">F</span> <small>(Visão / Curva / Tabela)</small></span>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- Botão Iniciar -->
-        <button id="start-btn" class="primary-btn">JOGAR PARTIDA</button>
+      <!-- Subpáginas (Loja, Inventário, Opções, Créditos) -->
+      <div id="menu-page" class="menu-page hidden"></div>
 
-        <!-- Instruções de Controles -->
-        <div class="controls-card">
-          Movimentação: <span class="key-badge">W</span><span class="key-badge">A</span><span class="key-badge">S</span><span class="key-badge">D</span> ou <span class="key-badge">&uarr;</span><span class="key-badge">&larr;</span><span class="key-badge">&darr;</span><span class="key-badge">&rarr;</span><br>
-          Chute: <span class="key-badge">ESPAÇO</span> ou <span class="key-badge">CLIQUE</span> · Passe especial: <span class="key-badge">F</span> ou botão durante Visão de Campo ou Curva Impossível<br>
-          Ativar Poder: <span class="key-badge">Q</span> ou botão ⚡ durante a partida
+      <!-- Painel Persistente de Aparência (movido dinamicamente para Opções) -->
+      <div id="appearance-vault" hidden>
+        <div id="appearance-panel" class="options-panel-card">
+          <div class="options-panel-header">
+            <h3>🎨 Personalização do Botão</h3>
+            <p>Escolha a cor base e o número da sua camisa</p>
+          </div>
+          <div class="appearance-editor-body">
+            <div class="preview-container">
+              <canvas id="player-preview-canvas" width="120" height="120"></canvas>
+            </div>
+            <div class="appearance-controls-col">
+              <div class="menu-group">
+                <span class="menu-label">Cor do seu Botão</span>
+                <div class="color-presets">
+                  <button type="button" class="color-swatch active" data-color="#2b70f6" style="background: #2b70f6;" aria-label="Azul"></button>
+                  <button type="button" class="color-swatch" data-color="#10b981" style="background: #10b981;" aria-label="Verde Esmeralda"></button>
+                  <button type="button" class="color-swatch" data-color="#f59e0b" style="background: #f59e0b;" aria-label="Âmbar"></button>
+                  <button type="button" class="color-swatch" data-color="#8b5cf6" style="background: #8b5cf6;" aria-label="Violeta"></button>
+                  <button type="button" class="color-swatch" data-color="#06b6d4" style="background: #06b6d4;" aria-label="Ciano"></button>
+                  <button type="button" class="color-swatch" data-color="#ec4899" style="background: #ec4899;" aria-label="Rosa"></button>
+                  <label class="custom-color-wrapper" for="custom-color-input" title="Escolher cor personalizada">
+                    <span class="visually-hidden">Cor personalizada</span>
+                    <input type="color" id="custom-color-input" value="#2b70f6">
+                  </label>
+                </div>
+              </div>
+              <div class="menu-group">
+                <label class="menu-label" for="jersey-number-input">Número da Camisa</label>
+                <div class="number-input-row">
+                  <input type="number" id="jersey-number-input" min="1" max="99" value="10">
+                  <span class="number-hint">De 1 a 99</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
+  </main>
   </div>
 
-  <!-- Lógica Principal do Jogo -->
-  <script src="script.js"></script>
 </body>
 </html>
