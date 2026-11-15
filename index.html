@@ -12,12 +12,174 @@
   <script defer src="js/physics.js"></script>
   <script defer src="js/skills/snakeTackle.js"></script>
   <script defer src="js/skills/curveShot.js"></script>
+  <script defer src="js/skills/pistolShot.js"></script>
+  <script defer src="js/skills/twoOne.js"></script>
   <script defer src="js/skills/powers.js"></script>
   <script defer src="js/ai.js"></script>
   <script defer src="js/ui/menus.js"></script>
   <script defer src="js/main.js"></script>
 </head>
 <body>
+  <!-- Biblioteca Vetorial SVG Inline (sem emojis genéricos) -->
+  <svg class="svg-sprite-defs" aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
+    <defs>
+      <linearGradient id="litoCoinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#fef08a" />
+        <stop offset="50%" stop-color="#f59e0b" />
+        <stop offset="100%" stop-color="#b45309" />
+      </linearGradient>
+    </defs>
+
+    <symbol id="icon-litocoin" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" fill="url(#litoCoinGrad)" stroke="#fef9c3" stroke-width="1.4" />
+      <circle cx="12" cy="12" r="7.2" fill="none" stroke="#78350f" stroke-opacity="0.55" stroke-width="1.2" stroke-dasharray="3 2" />
+      <path d="M9.5 7.2v9.4h5.4v-2.1h-3.1V7.2z" fill="#451a03" />
+    </symbol>
+
+    <symbol id="icon-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2 4.5 13.5H11L10 22l9.5-11.5H13L13 2Z" fill="currentColor" fill-opacity="0.22" />
+    </symbol>
+
+    <symbol id="icon-fullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M8 21H4a1 1 0 0 1-1-1v-4M16 21h4a1 1 0 0 0 1-1v-4" />
+    </symbol>
+
+    <symbol id="icon-exit-fullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9h4a1 1 0 0 0 1-1V4M20 9h-4a1 1 0 0 1-1-1V4M4 15h4a1 1 0 0 1 1 1v4M20 15h-4a1 1 0 0 0-1 1v4" />
+    </symbol>
+
+    <symbol id="icon-play" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6.5 4.4a1 1 0 0 1 1.5-.86l11.5 7.6a1 1 0 0 1 0 1.72L8 20.46a1 1 0 0 1-1.5-.86V4.4Z" />
+    </symbol>
+
+    <symbol id="icon-duel-1v1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9.5" fill="currentColor" fill-opacity="0.12" />
+      <polygon points="12,7 16.2,10.1 14.6,15 9.4,15 7.8,10.1" fill="currentColor" fill-opacity="0.35" />
+      <path d="M12 2.5V7M21 9l-4.8 1.1M17.5 19.8 14.6 15M6.5 19.8 9.4 15M3 9l4.8 1.1" />
+    </symbol>
+
+    <symbol id="icon-duo-2v2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7" cy="14" r="4" fill="currentColor" fill-opacity="0.22" />
+      <circle cx="17" cy="10" r="4" fill="currentColor" fill-opacity="0.22" />
+      <path d="M8.5 8.5c2.2-3 6-3.4 8.5-1.2" stroke-dasharray="2.5 2" />
+      <path d="M15.2 15.5c-2.2 3-6 3.4-8.5 1.2" />
+    </symbol>
+
+    <symbol id="icon-training" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.8" />
+      <circle cx="12" cy="12" r="4.5" stroke-opacity="0.7" />
+      <circle cx="12" cy="12" r="1.7" fill="currentColor" />
+      <path d="M12 1.8v2.7M12 19.5v2.7M1.8 12h2.7M19.5 12h2.7" />
+    </symbol>
+
+    <symbol id="icon-shop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 4h2.5l2.2 10.2a1.5 1.5 0 0 0 1.46 1.18h8.7a1.5 1.5 0 0 0 1.46-1.15L21 7.5H6.2" />
+      <circle cx="9.5" cy="19.5" r="1.5" fill="currentColor" />
+      <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" />
+    </symbol>
+
+    <symbol id="icon-inventory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.5 6.5V5a3.5 3.5 0 0 1 7 0v1.5" />
+      <rect x="4" y="6.5" width="16" height="14" rx="3" fill="currentColor" fill-opacity="0.14" />
+      <path d="M4 12.5h16M10 12.5v2.5h4v-2.5" />
+    </symbol>
+
+    <symbol id="icon-options" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.2" fill="currentColor" fill-opacity="0.2" />
+      <path d="M12 2.5v2.3M12 19.2v2.3M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M2.5 12h2.3M19.2 12h2.3M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7" />
+      <circle cx="12" cy="12" r="7" stroke-opacity="0.45" />
+    </symbol>
+
+    <symbol id="icon-credits" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" fill="currentColor" fill-opacity="0.18" />
+      <path d="M7 5.5H4a1.5 1.5 0 0 0-1.5 1.5v1A3.5 3.5 0 0 0 6 11.4M17 5.5h3A1.5 1.5 0 0 1 21.5 7v1a3.5 3.5 0 0 1-3.5 3.4" />
+      <path d="M12 14v4M8 20.5h8l-1-2.5H9l-1 2.5Z" />
+    </symbol>
+
+    <symbol id="icon-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.5 4 4 6.5l2 4 2.5-1V20h7V9.5l2.5 1 2-4L15.5 4a3.8 3.8 0 0 1-7 0Z" fill="currentColor" fill-opacity="0.15" />
+    </symbol>
+
+    <symbol id="icon-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3a9 9 0 1 0 0 18 2.2 2.2 0 0 0 2-3.1c-.4-.8.2-1.9 1.1-1.9H17a4 4 0 0 0 4-4c0-4.9-4-9-9-9Z" fill="currentColor" fill-opacity="0.14" />
+      <circle cx="8" cy="10" r="1.1" fill="currentColor" />
+      <circle cx="12" cy="7.5" r="1.1" fill="currentColor" />
+      <circle cx="15.8" cy="10" r="1.1" fill="currentColor" />
+      <circle cx="8.5" cy="14.5" r="1.1" fill="currentColor" />
+    </symbol>
+
+    <symbol id="icon-audio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z" fill="currentColor" fill-opacity="0.18" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.8a9 9 0 0 1 0 12.4" />
+    </symbol>
+
+    <symbol id="icon-gamepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="6.5" width="19" height="11" rx="5.5" fill="currentColor" fill-opacity="0.14" />
+      <path d="M7.5 10v4M5.5 12h4" />
+      <circle cx="15.5" cy="10.8" r="1" fill="currentColor" />
+      <circle cx="17.8" cy="13" r="1" fill="currentColor" />
+    </symbol>
+
+    <symbol id="icon-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 5l-7 7 7 7" />
+    </symbol>
+
+    <!-- Ícones Vetoriais das 12 Habilidades -->
+    <symbol id="icon-skill-cannon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 10h13l2-2h3v4h-4l-1.5 2H11l-1.8 5H5.5l1.8-6.2H3V10Z" fill="currentColor" fill-opacity="0.18" />
+      <path d="M21 6.5 22.8 5M21 10h2M21 13.5l1.8 1.5" stroke="#fb923c" />
+    </symbol>
+    <symbol id="icon-skill-sprint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2 5 13h6l-1.5 9L19 10.5h-6L14 2Z" fill="currentColor" fill-opacity="0.24" />
+    </symbol>
+    <symbol id="icon-skill-phantom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 20V11a6 6 0 0 1 12 0v9l-3-2-3 2-3-2-3 2Z" fill="currentColor" fill-opacity="0.18" />
+      <circle cx="10" cy="10.5" r="1" fill="currentColor" />
+      <circle cx="14" cy="10.5" r="1" fill="currentColor" />
+    </symbol>
+    <symbol id="icon-skill-vision" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2.5 12s3.8-6 9.5-6 9.5 6 9.5 6-3.8 6-9.5 6-9.5-6-9.5-6Z" fill="currentColor" fill-opacity="0.14" />
+      <circle cx="12" cy="12" r="3" fill="currentColor" fill-opacity="0.3" />
+    </symbol>
+    <symbol id="icon-skill-curve" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 18c2-9 9-13 15.5-10" />
+      <path d="M15.5 4.5 20.5 8l-3.5 4.5" />
+      <circle cx="5" cy="17.5" r="2.2" fill="currentColor" />
+    </symbol>
+    <symbol id="icon-skill-twoOne" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9h13l-3-3M20 15H7l3 3" />
+      <circle cx="5.5" cy="15" r="2" fill="currentColor" />
+      <circle cx="18.5" cy="9" r="2" fill="currentColor" />
+    </symbol>
+    <symbol id="icon-skill-snakeTackle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 17c2-4 5.5-3 7.5-6.5S14 4 19 5c-1.5 2.5 1 4.5-.5 7.5s-5 2-7 5" fill="currentColor" fill-opacity="0.16" />
+      <path d="M19 5l2.5-1M19 7.5l2.5.8" />
+    </symbol>
+    <symbol id="icon-skill-control" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 4v7a6 6 0 0 0 12 0V4" />
+      <circle cx="12" cy="11" r="2.5" fill="currentColor" fill-opacity="0.4" />
+      <path d="M5 4h2.5M16.5 4H19" />
+    </symbol>
+    <symbol id="icon-skill-eagle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 10c4-4 7.5-3.5 9-1.5 1.5-2 5-2.5 9 1.5-3 2-5.5 6-9 9.5C8.5 16 6 12 3 10Z" fill="currentColor" fill-opacity="0.2" />
+    </symbol>
+    <symbol id="icon-skill-sniper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="7.5" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+    </symbol>
+    <symbol id="icon-skill-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3 4.5 6.2v5.4c0 4.6 3.2 8.2 7.5 9.4 4.3-1.2 7.5-4.8 7.5-9.4V6.2L12 3Z" fill="currentColor" fill-opacity="0.2" />
+    </symbol>
+    <symbol id="icon-skill-ego" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2.5c2 3.5 5 5.2 5 9.2a5 5 0 1 1-10 0c0-2.1 1-4.1 2.4-5.7.2 1.8 1.1 2.7 2.1 2.7-.2-2-.3-4 .5-6.2Z" fill="currentColor" fill-opacity="0.24" />
+    </symbol>
+    <symbol id="icon-missions" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 3.5h8l1.5 2H20a1 1 0 0 1 1 1v13a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5v-13a1 1 0 0 1 1-1h2.5l1.5-2Z" />
+      <rect x="8.5" y="2.5" width="7" height="3" rx="1" fill="currentColor" fill-opacity="0.24" />
+      <path d="M7.5 10.5l1.8 1.8 3.2-3.3M14 11h3.5M7.5 15.8l1.8 1.8 3.2-3.3M14 16h3.5" />
+    </symbol>
+  </svg>
 
   <div id="fullscreen-stage">
   <main id="game-container">
@@ -27,7 +189,7 @@
         <div id="badge-p1" class="team-badge" style="background-color: #2b70f6;"></div>
         <span id="name-p1">Você</span>
         <div class="hud-coins-pill" title="Seu saldo de Lito Coins">
-          <span class="coin-icon" aria-hidden="true">🪙</span>
+          <svg class="svg-icon svg-coin-icon" width="16" height="16" aria-hidden="true"><use href="#icon-litocoin"></use></svg>
           <span id="hud-coin-count">50</span>
         </div>
       </div>
@@ -43,7 +205,10 @@
         <div class="team-badge" style="background-color: #e53935;"></div>
         <div class="hud-controls-hint">
           <button id="btn-pass" type="button" class="hud-btn" title="Passe especial (F)" hidden>Passe (F)</button>
-          <button id="btn-fullscreen" type="button" class="hud-btn" title="Alternar Tela Cheia">⛶ Tela</button>
+          <button id="btn-fullscreen" type="button" class="hud-btn hud-btn-icon" title="Alternar Tela Cheia">
+            <svg class="svg-icon" width="14" height="14" aria-hidden="true"><use href="#icon-fullscreen"></use></svg>
+            <span>Tela</span>
+          </button>
           <button id="btn-menu" type="button" class="hud-btn" title="Menu Principal">Menu</button>
           <button id="btn-restart" type="button" class="hud-btn" title="Reiniciar Partida">Reset</button>
         </div>
@@ -64,7 +229,9 @@
 
     <!-- HUD do poder equipado durante a partida -->
     <div id="power-hud" class="power-hud hidden">
-      <button id="power-activate" type="button" class="power-activate" title="Ativar poder (Q)" aria-label="Ativar poder (Q)">⚡</button>
+      <button id="power-activate" type="button" class="power-activate" title="Ativar poder (Q)" aria-label="Ativar poder (Q)">
+        <svg class="svg-icon" width="22" height="22" aria-hidden="true"><use href="#icon-bolt"></use></svg>
+      </button>
       <div class="power-hud-info">
         <strong id="power-name">Sem poder</strong>
         <div class="power-meter"><span id="power-meter-fill"></span></div>
@@ -99,45 +266,49 @@
         <div class="gameover-rewards-card">
           <div class="rewards-header">
             <span>Recompensas da Partida</span>
-            <span class="rewards-icon" aria-hidden="true">🪙</span>
+            <svg class="svg-icon svg-coin-icon" width="18" height="18" aria-hidden="true"><use href="#icon-litocoin"></use></svg>
           </div>
 
           <div class="reward-row">
             <span id="reward-result-label">Resultado:</span>
-            <span id="reward-result-val" class="reward-val">+0 🪙</span>
+            <span id="reward-result-val" class="reward-val">+0 LC</span>
           </div>
 
           <div class="reward-row">
             <span id="reward-goals-label">Gols Marcados:</span>
-            <span id="reward-goals-val" class="reward-val">+0 🪙</span>
+            <span id="reward-goals-val" class="reward-val">+0 LC</span>
           </div>
           <div id="reward-participation-row" class="reward-row" hidden>
             <span>Participação 2V2:</span>
-            <span id="reward-participation-val" class="reward-val">+0 🪙</span>
+            <span id="reward-participation-val" class="reward-val">+0 LC</span>
           </div>
           <div id="reward-win-row" class="reward-row" hidden>
             <span>Bônus de vitória 2V2:</span>
-            <span id="reward-win-val" class="reward-val">+0 🪙</span>
+            <span id="reward-win-val" class="reward-val">+0 LC</span>
           </div>
           <div id="reward-challenges-row" class="reward-row" hidden>
             <span>Desafios 2V2:</span>
-            <span id="reward-challenges-val" class="reward-val">+0 🪙</span>
+            <span id="reward-challenges-val" class="reward-val">+0 LC</span>
           </div>
           <p id="two-v-two-challenges-summary" class="two-v-two-challenges-summary" hidden></p>
 
           <div class="reward-row total-row">
             <span>Total Ganho:</span>
-            <span id="reward-total-val" class="reward-val highlight">+0 🪙</span>
+            <span id="reward-total-val" class="reward-val highlight">+0 LC</span>
           </div>
 
           <div class="reward-balance-sub">
-            Saldo Atualizado: <strong id="reward-new-balance">🪙 50</strong>
+            Saldo Atualizado:
+            <span class="inline-coin-wrap">
+              <svg class="svg-icon svg-coin-icon" width="14" height="14" aria-hidden="true"><use href="#icon-litocoin"></use></svg>
+              <strong id="reward-new-balance">50 LC</strong>
+            </span>
           </div>
         </div>
 
         <div class="gameover-actions">
-          <button id="play-again-btn" type="button" class="primary-btn">Jogar Novamente</button>
-          <button id="game-over-menu-btn" type="button" class="secondary-btn">Menu Principal</button>
+          <button id="play-again-btn" type="button" class="primary-btn cyber-btn">Jogar Novamente</button>
+          <button id="game-over-menu-btn" type="button" class="secondary-btn cyber-btn">Menu Principal</button>
         </div>
       </div>
     </section>
@@ -145,79 +316,109 @@
     <!-- Menu Inicial e Telas Modulares -->
     <section id="menu-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="main-menu-title">
       <!-- Fundo Imersivo: Mesa Tática Holográfica de Futebol de Botão -->
-      <svg class="cyber-pitch-bg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <svg class="cyber-pitch-bg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
-          <radialGradient id="cyberTableGlow" cx="50%" cy="48%" r="62%">
-            <stop offset="0%" stop-color="#0b2848" stop-opacity="0.88" />
-            <stop offset="55%" stop-color="#061428" stop-opacity="0.95" />
+          <radialGradient id="cyberTableGlow" cx="50%" cy="48%" r="65%">
+            <stop offset="0%" stop-color="#0d3158" stop-opacity="0.92" />
+            <stop offset="52%" stop-color="#07182f" stop-opacity="0.96" />
             <stop offset="100%" stop-color="#030712" stop-opacity="1" />
           </radialGradient>
-          <pattern id="cyberHexGrid" width="36" height="36" patternUnits="userSpaceOnUse">
-            <path d="M 36 0 L 0 0 0 36" fill="none" stroke="rgba(56, 189, 248, 0.08)" stroke-width="1" />
+          <radialGradient id="homeSpot" cx="22%" cy="50%" r="45%">
+            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.22" />
+            <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+          </radialGradient>
+          <radialGradient id="awaySpot" cx="78%" cy="50%" r="45%">
+            <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.18" />
+            <stop offset="100%" stop-color="#f43f5e" stop-opacity="0" />
+          </radialGradient>
+          <pattern id="cyberHexGrid" width="38" height="38" patternUnits="userSpaceOnUse">
+            <path d="M 38 0 L 0 0 0 38" fill="none" stroke="rgba(56, 189, 248, 0.085)" stroke-width="1" />
+            <circle cx="0" cy="0" r="1.1" fill="rgba(125, 211, 252, 0.16)" />
           </pattern>
           <filter id="neonCyanGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="4.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter id="neonRedGlow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          <filter id="neonRedGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="5.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
-        <rect width="1000" height="600" fill="url(#cyberTableGlow)" />
-        <rect width="1000" height="600" fill="url(#cyberHexGrid)" />
-        <!-- Moldura metálica externa -->
-        <rect x="26" y="24" width="948" height="552" rx="22" fill="none" stroke="rgba(148, 163, 184, 0.22)" stroke-width="8" />
-        <rect x="38" y="36" width="924" height="528" rx="14" fill="none" stroke="rgba(56, 189, 248, 0.45)" stroke-width="2" filter="url(#neonCyanGlow)" />
+        <rect width="1280" height="720" fill="url(#cyberTableGlow)" />
+        <rect width="1280" height="720" fill="url(#homeSpot)" />
+        <rect width="1280" height="720" fill="url(#awaySpot)" />
+        <rect width="1280" height="720" fill="url(#cyberHexGrid)" />
+
+        <!-- Moldura metálica externa da mesa tática -->
+        <rect x="28" y="26" width="1224" height="668" rx="26" fill="none" stroke="rgba(148, 163, 184, 0.2)" stroke-width="10" />
+        <rect x="44" y="42" width="1192" height="636" rx="16" fill="none" stroke="rgba(56, 189, 248, 0.56)" stroke-width="2.2" filter="url(#neonCyanGlow)" />
+
         <!-- Linhas do campo em neon ciano -->
-        <g stroke="#38bdf8" stroke-opacity="0.52" stroke-width="2.4" fill="none" filter="url(#neonCyanGlow)">
-          <line x1="500" y1="36" x2="500" y2="564" />
-          <circle cx="500" cy="300" r="88" />
-          <circle cx="500" cy="300" r="5" fill="#7dd3fc" />
+        <g stroke="#38bdf8" stroke-opacity="0.58" stroke-width="2.6" fill="none" filter="url(#neonCyanGlow)">
+          <line x1="640" y1="42" x2="640" y2="678" />
+          <circle cx="640" cy="360" r="108" />
+          <circle cx="640" cy="360" r="6" fill="#bae6fd" />
           <!-- Áreas e Gols -->
-          <rect x="38" y="150" width="136" height="300" />
-          <rect x="826" y="150" width="136" height="300" />
-          <rect x="38" y="220" width="52" height="160" />
-          <rect x="910" y="220" width="52" height="160" />
-          <path d="M 38 66 A 30 30 0 0 0 68 36" />
-          <path d="M 932 36 A 30 30 0 0 0 962 66" />
-          <path d="M 38 534 A 30 30 0 0 1 68 564" />
-          <path d="M 932 564 A 30 30 0 0 1 962 534" />
+          <rect x="44" y="176" width="174" height="368" />
+          <rect x="1062" y="176" width="174" height="368" />
+          <rect x="44" y="256" width="66" height="208" />
+          <rect x="1170" y="256" width="66" height="208" />
+          <path d="M 218 286 A 92 92 0 0 1 218 434" />
+          <path d="M 1062 286 A 92 92 0 0 0 1062 434" />
+          <path d="M 44 78 A 36 36 0 0 0 80 42" />
+          <path d="M 1200 42 A 36 36 0 0 0 1236 78" />
+          <path d="M 44 642 A 36 36 0 0 1 80 678" />
+          <path d="M 1200 678 A 36 36 0 0 1 1236 642" />
         </g>
-        <!-- Peças / Botões Holográficos posicionados na mesa -->
-        <g opacity="0.72" filter="url(#neonCyanGlow)">
-          <circle cx="155" cy="158" r="24" fill="rgba(14, 165, 233, 0.22)" stroke="#38bdf8" stroke-width="3" />
-          <circle cx="155" cy="158" r="14" fill="none" stroke="#bae6fd" stroke-width="1.5" stroke-dasharray="6 4" />
-          <circle cx="245" cy="455" r="26" fill="rgba(37, 99, 235, 0.24)" stroke="#60a5fa" stroke-width="3" />
-          <circle cx="245" cy="455" r="15" fill="none" stroke="#bfdbfe" stroke-width="1.5" />
+
+        <!-- Vetores táticos sutis de lançamento -->
+        <path d="M 278 522 Q 490 450 640 360" fill="none" stroke="#38bdf8" stroke-opacity="0.28" stroke-width="2" stroke-dasharray="7 7" />
+        <path d="M 1010 212 Q 830 265 640 360" fill="none" stroke="#fb7185" stroke-opacity="0.24" stroke-width="2" stroke-dasharray="7 7" />
+
+        <!-- Peças / Botões Holográficos posicionados na arena -->
+        <g opacity="0.82" filter="url(#neonCyanGlow)">
+          <circle cx="176" cy="176" r="29" fill="rgba(14, 165, 233, 0.24)" stroke="#38bdf8" stroke-width="3.2" />
+          <circle cx="176" cy="176" r="18" fill="none" stroke="#bae6fd" stroke-width="1.6" stroke-dasharray="7 4" />
+          <circle cx="176" cy="176" r="5" fill="#e0f2fe" />
+          <circle cx="278" cy="522" r="32" fill="rgba(37, 99, 235, 0.26)" stroke="#60a5fa" stroke-width="3.4" />
+          <circle cx="278" cy="522" r="19" fill="none" stroke="#bfdbfe" stroke-width="1.6" />
+          <circle cx="278" cy="522" r="5.5" fill="#93c5fd" />
         </g>
-        <g opacity="0.68" filter="url(#neonRedGlow)">
-          <circle cx="845" cy="175" r="24" fill="rgba(244, 63, 94, 0.22)" stroke="#fb7185" stroke-width="3" />
-          <circle cx="845" cy="175" r="14" fill="none" stroke="#fecdd3" stroke-width="1.5" stroke-dasharray="6 4" />
-          <circle cx="775" cy="450" r="25" fill="rgba(239, 68, 68, 0.22)" stroke="#f87171" stroke-width="3" />
-          <circle cx="775" cy="450" r="15" fill="none" stroke="#fee2e2" stroke-width="1.5" />
+        <g opacity="0.78" filter="url(#neonRedGlow)">
+          <circle cx="1010" cy="212" r="29" fill="rgba(244, 63, 94, 0.22)" stroke="#fb7185" stroke-width="3.2" />
+          <circle cx="1010" cy="212" r="18" fill="none" stroke="#fecdd3" stroke-width="1.6" stroke-dasharray="7 4" />
+          <circle cx="1010" cy="212" r="5" fill="#ffe4e6" />
+          <circle cx="1084" cy="532" r="30" fill="rgba(239, 68, 68, 0.24)" stroke="#f87171" stroke-width="3.2" />
+          <circle cx="1084" cy="532" r="18" fill="none" stroke="#fee2e2" stroke-width="1.6" />
+          <circle cx="1084" cy="532" r="5" fill="#fecaca" />
         </g>
-        <circle cx="500" cy="300" r="11" fill="#e0f2fe" stroke="#38bdf8" stroke-width="2" opacity="0.78" filter="url(#neonCyanGlow)" />
+        <circle cx="640" cy="360" r="13" fill="#e0f2fe" stroke="#38bdf8" stroke-width="2.5" opacity="0.85" filter="url(#neonCyanGlow)" />
       </svg>
 
       <div class="menu-card menu-card-wide cyber-hud-panel" id="main-menu-card">
         <div class="cyber-hud-corners" aria-hidden="true"></div>
         <div class="menu-hero-header">
           <div class="menu-brand">
-            <span class="arcade-pill">⚡ Futebol Arcade 2D</span>
+            <span class="arcade-pill">
+              <svg class="svg-icon" width="13" height="13" aria-hidden="true"><use href="#icon-bolt"></use></svg>
+              <span>Futebol Arcade 2D</span>
+            </span>
             <h1 id="main-menu-title" class="menu-title">LITOBALL</h1>
             <p class="menu-subtitle">Botão tático em 60 FPS &bull; Duelos 1v1, 2v2 e Habilidades</p>
           </div>
           <div class="menu-hero-actions">
-            <button id="menu-fullscreen-btn" type="button" class="hud-btn menu-fs-btn" title="Alternar Tela Cheia">⛶ Tela Cheia</button>
+            <button id="menu-fullscreen-btn" type="button" class="hud-btn menu-fs-btn cyber-chip-btn" title="Alternar Tela Cheia">
+              <svg class="svg-icon" width="15" height="15" aria-hidden="true"><use href="#icon-fullscreen"></use></svg>
+              <span>Tela Cheia</span>
+            </button>
             <div class="menu-coins-badge" title="Saldo de Lito Coins">
-              <span aria-hidden="true">🪙</span>
+              <svg class="svg-icon svg-coin-icon" width="20" height="20" aria-hidden="true"><use href="#icon-litocoin"></use></svg>
               <span id="menu-coin-count">50</span>
               <small>Lito Coins</small>
             </div>
@@ -226,38 +427,125 @@
 
         <div id="resume-slot"></div>
 
-        <!-- Seleção Rápida de Modos -->
+        <!-- Seletor de Campo Pré-Partida (1v1, 2v2 e Treino) -->
+        <section class="pitch-selector-section" aria-label="Escolha do campo">
+          <div class="pitch-selector-head">
+            <span class="pitch-selector-kicker">Arena da Partida</span>
+            <span class="pitch-selector-hint">Salvo automaticamente para 1v1, 2v2 e Treino</span>
+          </div>
+          <div class="pitch-choice-grid" role="radiogroup" aria-label="Tema do campo">
+            <label class="pitch-choice-card">
+              <input type="radio" name="pitch-theme" value="classic" checked />
+              <span class="pitch-mini-preview pitch-preview-classic" aria-hidden="true">
+                <span class="pitch-mini-line"></span>
+                <span class="pitch-mini-circle"></span>
+              </span>
+              <span class="pitch-choice-text">
+                <strong>Campo Clássico</strong>
+                <small>Grama verde natural</small>
+              </span>
+            </label>
+            <label class="pitch-choice-card">
+              <input type="radio" name="pitch-theme" value="futsal" />
+              <span class="pitch-mini-preview pitch-preview-futsal" aria-hidden="true">
+                <span class="pitch-mini-line"></span>
+                <span class="pitch-mini-circle"></span>
+              </span>
+              <span class="pitch-choice-text">
+                <strong>Quadra de Futsal</strong>
+                <small>Piso amadeirado &amp; área D</small>
+              </span>
+            </label>
+            <label class="pitch-choice-card">
+              <input type="radio" name="pitch-theme" value="cyber" />
+              <span class="pitch-mini-preview pitch-preview-cyber" aria-hidden="true">
+                <span class="pitch-mini-line"></span>
+                <span class="pitch-mini-circle"></span>
+              </span>
+              <span class="pitch-choice-text">
+                <strong>Arena Futurista</strong>
+                <small>Neon ciano &amp; grade tática</small>
+              </span>
+            </label>
+            <label class="pitch-choice-card">
+              <input type="radio" name="pitch-theme" value="jurassic" />
+              <span class="pitch-mini-preview pitch-preview-jurassic" aria-hidden="true">
+                <span class="pitch-mini-line"></span>
+                <span class="pitch-mini-circle"></span>
+              </span>
+              <span class="pitch-choice-text">
+                <strong>Arena Jurássica</strong>
+                <small>Fóssil T-Rex &amp; bordas âmbar</small>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Seleção Rápida de Modos (Botões Chanfrados Cyber-Arcade) -->
         <div class="mode-grid">
-          <button id="start-btn" type="button" class="primary-btn mode-card-btn mode-primary cyber-btn-1v1">
-            <span class="mode-title">⚽ Jogar 1v1</span>
-            <span class="mode-desc">DUELO CLÁSSICO &bull; 3 MIN OU 5 GOLS</span>
+          <button id="start-btn" type="button" class="primary-btn mode-card-btn mode-primary cyber-btn cyber-btn-1v1">
+            <span class="mode-btn-row">
+              <span class="mode-icon-badge" aria-hidden="true">
+                <svg class="svg-icon" width="24" height="24"><use href="#icon-duel-1v1"></use></svg>
+              </span>
+              <span class="mode-title-group">
+                <span class="mode-title">Jogar 1v1</span>
+                <span class="mode-desc">DUELO CLÁSSICO &bull; 3 MIN OU 5 GOLS</span>
+              </span>
+              <span class="cyber-chevrons" aria-hidden="true">&raquo;</span>
+            </span>
           </button>
-          <button id="start-2v2-btn" type="button" class="secondary-btn mode-card-btn two-v-two-mode-btn cyber-btn-2v2">
-            <span class="mode-title">🤝 Jogar 2v2 — Duplas</span>
-            <span class="mode-desc">Arena ampliada &bull; Tabelas, passes e desafios</span>
+          <button id="start-2v2-btn" type="button" class="secondary-btn mode-card-btn two-v-two-mode-btn cyber-btn cyber-btn-2v2">
+            <span class="mode-btn-inline">
+              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true">
+                <svg class="svg-icon" width="22" height="22"><use href="#icon-duo-2v2"></use></svg>
+              </span>
+              <span class="mode-title">Jogar 2v2 &mdash; Duplas</span>
+            </span>
+            <span class="mode-desc">Arena ampliada &bull; Tabelas, passes e 5 gols</span>
           </button>
-          <button id="start-training-btn" type="button" class="secondary-btn mode-card-btn mode-training cyber-btn-training">
-            <span class="mode-title">🎯 Treino Livre</span>
+          <button id="start-training-btn" type="button" class="secondary-btn mode-card-btn mode-training cyber-btn cyber-btn-training">
+            <span class="mode-btn-inline">
+              <span class="mode-icon-badge mode-icon-emerald" aria-hidden="true">
+                <svg class="svg-icon" width="22" height="22"><use href="#icon-training"></use></svg>
+              </span>
+              <span class="mode-title">Treino Livre</span>
+            </span>
             <span class="mode-desc">Pratique domínio, chutes e habilidades sem placar</span>
           </button>
         </div>
 
         <!-- Navegação entre Telas -->
         <nav class="menu-nav-row" aria-label="Telas do jogo">
-          <button type="button" class="nav-tile-btn" data-view="shop">
-            <span class="nav-icon" aria-hidden="true">🛒</span>
+          <button type="button" class="nav-tile-btn cyber-btn" data-view="shop">
+            <span class="nav-icon-frame" aria-hidden="true">
+              <svg class="svg-icon" width="24" height="24"><use href="#icon-shop"></use></svg>
+            </span>
             <span class="nav-label">Loja</span>
           </button>
-          <button type="button" class="nav-tile-btn" data-view="inventory">
-            <span class="nav-icon" aria-hidden="true">🎒</span>
+          <button type="button" class="nav-tile-btn cyber-btn" data-view="inventory">
+            <span class="nav-icon-frame" aria-hidden="true">
+              <svg class="svg-icon" width="24" height="24"><use href="#icon-inventory"></use></svg>
+            </span>
             <span class="nav-label">Inventário</span>
           </button>
-          <button type="button" class="nav-tile-btn" data-view="options">
-            <span class="nav-icon" aria-hidden="true">⚙️</span>
+          <button type="button" class="nav-tile-btn cyber-btn nav-tile-missions" data-view="missions">
+            <span id="missions-ready-badge" class="nav-badge-count" hidden>0</span>
+            <span class="nav-icon-frame" aria-hidden="true">
+              <svg class="svg-icon" width="24" height="24"><use href="#icon-missions"></use></svg>
+            </span>
+            <span class="nav-label">Missões</span>
+          </button>
+          <button type="button" class="nav-tile-btn cyber-btn" data-view="options">
+            <span class="nav-icon-frame" aria-hidden="true">
+              <svg class="svg-icon" width="24" height="24"><use href="#icon-options"></use></svg>
+            </span>
             <span class="nav-label">Opções</span>
           </button>
-          <button type="button" class="nav-tile-btn" data-view="credits">
-            <span class="nav-icon" aria-hidden="true">🏆</span>
+          <button type="button" class="nav-tile-btn cyber-btn" data-view="credits">
+            <span class="nav-icon-frame" aria-hidden="true">
+              <svg class="svg-icon" width="24" height="24"><use href="#icon-credits"></use></svg>
+            </span>
             <span class="nav-label">Créditos</span>
           </button>
         </nav>
@@ -282,7 +570,7 @@
             </div>
             <div class="control-hint-item">
               <span class="control-hint-label">Ativar Poder</span>
-              <span class="control-hint-keys"><span id="hint-power-key" class="key-badge key-badge-gold">Q</span> <small>ou</small> <span class="key-badge key-badge-gold">⚡ HUD</span></span>
+              <span class="control-hint-keys"><span id="hint-power-key" class="key-badge key-badge-gold">Q</span> <small>ou</small> <span class="key-badge key-badge-gold">BOTÃO HUD</span></span>
             </div>
             <div class="control-hint-item">
               <span class="control-hint-label">Passe Especial</span>
@@ -299,7 +587,10 @@
       <div id="appearance-vault" hidden>
         <div id="appearance-panel" class="options-panel-card">
           <div class="options-panel-header">
-            <h3>🎨 Personalização do Botão</h3>
+            <h3 class="heading-with-icon">
+              <svg class="svg-icon" width="18" height="18" aria-hidden="true"><use href="#icon-palette"></use></svg>
+              <span>Personalização do Botão</span>
+            </h3>
             <p>Escolha a cor base e o número da sua camisa</p>
           </div>
           <div class="appearance-editor-body">

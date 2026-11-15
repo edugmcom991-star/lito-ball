@@ -8,6 +8,7 @@
 let menuWasRunning = false;
 let activePage = 'shop';
 let activeCategory = 'shirts';
+let activeMissionTab = 'daily';
 let activeRemapAction = null;
 let remapTimeoutHandler = null;
 
@@ -19,6 +20,10 @@ const PAGE_META = {
   inventory: {
     title: 'Seu Inventário',
     subtitle: 'Gerencie e equipe seus itens adquiridos antes ou durante a partida'
+  },
+  missions: {
+    title: 'Central de Missões',
+    subtitle: 'Cumpra objetivos diários, semanais e de carreira para ganhar Lito Coins'
   },
   options: {
     title: 'Opções & Controles',
@@ -94,15 +99,14 @@ function updatePowerHud() {
   const sniperArmed = power?.id === 'sniper' && player1.powerEffect === 'sniper';
   const shadowActive = power?.id === 'shadow' && player1.powerEffect === 'shadow' && player1.powerEffectTimer > 0;
   const egoActive = power?.id === 'ego' && player1.powerEffect === 'ego' && player1.powerEffectTimer > 0;
-  const twoOneChoosing = !!twoOneSelection;
-  const twoOneActive = !!twoOnePlay;
+  const twoOneActive = typeof twoOnePlay !== 'undefined' && !!twoOnePlay;
   const snakeTackle = snakeTackles.find(tackle => tackle.owner === player1);
   const snakeActive = !!snakeTackle;
   const powerKeyLabel = formatKeyLabel(controlsConfig.powerKey);
 
   const powerButton = document.getElementById('power-activate');
   const powerButtonLabel = power ? `Ativar ${power.name} (${powerKeyLabel})` : `Ativar poder (${powerKeyLabel})`;
-  powerButton.textContent = power ? (SKILL_ICONS[power.id] || '⚡') : '⚡';
+  powerButton.innerHTML = power ? (SKILL_ICONS[power.id] || getSvgIcon('icon-bolt', 22)) : getSvgIcon('icon-bolt', 22);
   powerButton.title = powerButtonLabel;
   powerButton.setAttribute('aria-label', powerButtonLabel);
 
@@ -120,10 +124,10 @@ function updatePowerHud() {
   const effectActive = player1.powerEffectTimer > 0 || snakeActive;
   const cooldownReady = player1.powerCooldown <= 0;
   const countdownLocked = (gameState.countdownTimer || 0) > 0;
-  const ready = cooldownReady && !shotBuffPending && !effectActive && !twoOneChoosing && !twoOneActive && !countdownLocked;
+  const ready = cooldownReady && !shotBuffPending && !effectActive && !twoOneActive && !countdownLocked;
 
   powerButton.classList.toggle('cooldown', !cooldownReady);
-  powerButton.classList.toggle('active', visionActive || eagleArmed || sniperArmed || shadowActive || egoActive || twoOneChoosing || twoOneActive || snakeActive);
+  powerButton.classList.toggle('active', visionActive || eagleArmed || sniperArmed || shadowActive || egoActive || twoOneActive || snakeActive);
   powerButton.disabled = !ready;
 
   if (ready && !powerReadyLast && power) {
@@ -144,30 +148,26 @@ function updatePowerHud() {
 
   const statusText = snakeTackle
     ? (snakeTackle.phase === 'lunge'
-      ? '🐍 Bote da Serpente em avanço!'
+      ? 'Bote da Serpente em avanço!'
       : snakeTackle.phase === 'strike'
-        ? '🐍 Impacto da Serpente!'
-        : '🐍 Dissipando...')
-    : twoOneChoosing
-      ? 'Escolha o companheiro · F ou clique'
-      : twoOneActive
-        ? (twoOnePlay.phase === 'outbound'
-          ? 'Toque e Passa: arranque para o espaço'
-          : twoOnePlay.phase === 'receiveWait'
-            ? `Companheiro devolve em ${twoOnePlay.waitTimer.toFixed(1)}s`
-            : 'Passe adiantado · receba no pé')
-        : visionActive
+        ? 'Impacto da Serpente!'
+        : 'Dissipando...')
+    : twoOneActive
+      ? (twoOnePlay.mode === 'wall' || twoOnePlay.mode === 'orbital'
+        ? (twoOnePlay.phase === 'outbound' ? 'Tabela na Parede: avance para receber' : 'Parede retornando · receba!')
+        : (twoOnePlay.phase === 'outbound' ? 'Toque e Passa: corra para receber' : 'Devolução de primeira!'))
+      : visionActive
           ? `Visão ativa: ${player1.powerEffectTimer.toFixed(1)}s`
           : eagleArmed
-            ? `🦅 Alcance estendido: ${player1.powerEffectTimer.toFixed(1)}s`
+            ? `Alcance estendido: ${player1.powerEffectTimer.toFixed(1)}s`
             : sniperArmed
-              ? `🎯 Mira armada: ${player1.powerEffectTimer.toFixed(1)}s`
+              ? `Mira armada: ${player1.powerEffectTimer.toFixed(1)}s`
               : shadowActive
-                ? `👥 Sombra ativa: ${player1.powerEffectTimer.toFixed(1)}s`
+                ? `Sombra ativa: ${player1.powerEffectTimer.toFixed(1)}s`
                 : egoActive
-                  ? `🔥 Despertar do Ego: ${player1.powerEffectTimer.toFixed(1)}s`
+                  ? `Despertar do Ego: ${player1.powerEffectTimer.toFixed(1)}s`
                   : curveArmed
-                    ? '🌀 Curva armada · mire (mouse/WASD) e chute!'
+                    ? 'Curva armada · mire (mouse/WASD) e chute!'
                     : shotBuffPending
                       ? 'Próximo chute fortalecido'
                       : player1.dashTimer > 0
@@ -225,8 +225,8 @@ function refreshResumeSlot() {
     const btn = document.createElement('button');
     btn.id = 'menu-resume';
     btn.type = 'button';
-    btn.className = 'secondary-btn resume-match-btn';
-    btn.innerHTML = '<span class="cyber-chevrons" aria-hidden="true">&laquo;</span><span>▶ Continuar Partida em Andamento</span><span class="cyber-chevrons" aria-hidden="true">&raquo;</span>';
+    btn.className = 'secondary-btn cyber-btn resume-match-btn';
+    btn.innerHTML = `<span class="cyber-chevrons" aria-hidden="true">&laquo;</span><span class="btn-inline-label">${getSvgIcon('icon-play', 16)}<span>Continuar Partida em Andamento</span></span><span class="cyber-chevrons" aria-hidden="true">&raquo;</span>`;
     btn.onclick = () => {
       menuOverlay.classList.add('hidden');
       resumeMatch();
@@ -241,9 +241,10 @@ function closeFeaturePage() {
   const menuPage = document.getElementById('menu-page');
   const mainCard = document.getElementById('main-menu-card');
   menuPage.classList.add('hidden');
-  menuPage.classList.remove('menu-page--shop', 'menu-page--credits');
+  menuPage.classList.remove('menu-page--shop', 'menu-page--credits', 'menu-page--missions');
   mainCard.style.display = '';
   refreshResumeSlot();
+  if (typeof updateMissionsBadgeUI === 'function') updateMissionsBadgeUI();
 }
 
 function showFeaturePage(page) {
@@ -262,12 +263,13 @@ function showFeaturePage(page) {
   menuPage.classList.remove('hidden');
   menuPage.classList.toggle('menu-page--shop', page === 'shop');
   menuPage.classList.toggle('menu-page--credits', page === 'credits');
+  menuPage.classList.toggle('menu-page--missions', page === 'missions');
 
   const categoryTabs = (page === 'shop' || page === 'inventory')
     ? `
       <div class="menu-categories" role="tablist">
-        <button type="button" data-cat="shirts" class="cat-tab-btn ${activeCategory === 'shirts' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'shirts'}">👕 Camisas</button>
-        <button type="button" data-cat="powers" class="cat-tab-btn ${activeCategory === 'powers' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'powers'}">⚡ Poderes &amp; Habilidades</button>
+        <button type="button" data-cat="shirts" class="cat-tab-btn ${activeCategory === 'shirts' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'shirts'}">${getSvgIcon('icon-shirt', 16)}<span>Camisas</span></button>
+        <button type="button" data-cat="powers" class="cat-tab-btn ${activeCategory === 'powers' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'powers'}">${getSvgIcon('icon-bolt', 16)}<span>Poderes &amp; Habilidades</span></button>
       </div>
     `
     : '';
@@ -281,7 +283,7 @@ function showFeaturePage(page) {
         </div>
         <div class="menu-page-header-right">
           <div class="menu-coins-badge" title="Seu saldo de Lito Coins">
-            <span aria-hidden="true">🪙</span>
+            ${getSvgIcon('icon-litocoin', 18, 'svg-coin-icon')}
             <span id="page-coin-count">${ECONOMY.getCoins().toLocaleString('pt-BR')}</span>
             <small>Lito Coins</small>
           </div>
@@ -292,13 +294,14 @@ function showFeaturePage(page) {
       <div id="menu-page-content"></div>
 
       <div class="menu-page-footer">
-        <button id="feature-back" type="button" class="secondary-btn">← Voltar ao Menu</button>
-        ${menuWasRunning ? '<button id="feature-resume" type="button" class="primary-btn">▶ Continuar Partida</button>' : ''}
+        <button id="feature-back" type="button" class="secondary-btn cyber-btn"><span class="btn-inline-label">${getSvgIcon('icon-back', 16)}<span>Voltar ao Menu</span></span></button>
+        ${menuWasRunning ? `<button id="feature-resume" type="button" class="primary-btn cyber-btn"><span class="btn-inline-label">${getSvgIcon('icon-play', 16)}<span>Continuar Partida</span></span></button>` : ''}
       </div>
     </div>
   `;
 
   if (page === 'shop' || page === 'inventory') renderItems();
+  if (page === 'missions') renderMissions();
   if (page === 'options') renderOptions();
   if (page === 'credits') renderCredits();
 
@@ -337,7 +340,7 @@ function renderItems() {
     summaryHtml = `
       <div class="equipped-summary-bar">
         <div class="equipped-summary-chip">
-          <span class="nav-icon" aria-hidden="true">👕</span>
+          <span class="nav-icon" aria-hidden="true">${getSvgIcon('icon-shirt', 22)}</span>
           <div>
             <small>Camisa Equipada</small>
             <strong>${equippedShirt ? equippedShirt.name : 'Clássica (Cor Personalizada)'}</strong>
@@ -345,7 +348,7 @@ function renderItems() {
           ${equippedShirt ? '<button type="button" class="hud-btn" id="unequip-shirt-btn" style="margin-inline-start:auto;">Usar Clássica</button>' : ''}
         </div>
         <div class="equipped-summary-chip">
-          <span class="nav-icon" aria-hidden="true">${equippedPower ? (SKILL_ICONS[equippedPower.id] || '⚡') : '⚡'}</span>
+          <span class="nav-icon" aria-hidden="true">${equippedPower ? renderPowerIconMedia(equippedPower.id, 22, equippedPower.name) : getSvgIcon('icon-bolt', 22)}</span>
           <div>
             <small>Habilidade Equipada</small>
             <strong>${equippedPower ? equippedPower.name : 'Nenhuma'}</strong>
@@ -361,7 +364,7 @@ function renderItems() {
       ${summaryHtml}
       <div class="empty-inventory">
         <p>Você ainda não possui itens nesta categoria.</p>
-        <button type="button" class="primary-btn" id="go-to-shop-btn">🛒 Visitar a Loja</button>
+        <button type="button" class="primary-btn cyber-btn" id="go-to-shop-btn"><span class="btn-inline-label">${getSvgIcon('icon-shop', 18)}<span>Visitar a Loja</span></span></button>
       </div>
     `;
     const goShop = document.getElementById('go-to-shop-btn');
@@ -376,15 +379,16 @@ function renderItems() {
       ? profile.equippedShirt === item.id
       : profile.equippedPower === item.id;
 
+    const coinMini = getSvgIcon('icon-litocoin', 14, 'svg-coin-icon');
     const iconHtml = activeCategory === 'shirts'
       ? `<span class="item-icon shirt-icon" style="background:linear-gradient(90deg,${item.colors.join(',')})">${item.badge}</span>`
-      : `<span class="item-icon" aria-hidden="true">${SKILL_ICONS[item.id] || '⚡'}</span>`;
+      : `<span class="item-icon item-icon-power">${renderPowerIconMedia(item.id, 22, item.name)}</span>`;
 
     const statusBadge = equipped
-      ? '<span class="item-status-pill equipped">✓ Equipado</span>'
+      ? '<span class="item-status-pill equipped">&#10003; Equipado</span>'
       : has
         ? '<span class="item-status-pill owned">Adquirido</span>'
-        : `<span class="item-status-pill price">🪙 ${item.price.toLocaleString('pt-BR')}</span>`;
+        : `<span class="item-status-pill price">${coinMini} ${item.price.toLocaleString('pt-BR')}</span>`;
 
     const cooldownMeta = activeCategory === 'powers'
       ? `<span class="item-meta">Recarga base: ${POWER_COOLDOWNS[item.id] || 12}s</span>`
@@ -398,11 +402,13 @@ function renderItems() {
       : '';
     const upgradeControl = has && item.id === 'phantom'
       ? (upgradeCost
-        ? `${levelInfo}<button type="button" class="secondary-btn upgrade-btn" data-upgrade="phantom">Melhorar Nv.${level + 1} · 🪙 ${upgradeCost.toLocaleString('pt-BR')}</button>`
-        : `${levelInfo}<small class="upgrade-level">✓ Nível máximo atingido</small>`)
+        ? `${levelInfo}<button type="button" class="secondary-btn upgrade-btn" data-upgrade="phantom">Melhorar Nv.${level + 1} · ${coinMini} ${upgradeCost.toLocaleString('pt-BR')}</button>`
+        : `${levelInfo}<small class="upgrade-level">&#10003; Nível máximo atingido</small>`)
       : '';
 
-    const actionLabel = has ? (equipped ? 'Equipado' : 'Equipar') : `Comprar · 🪙 ${item.price.toLocaleString('pt-BR')}`;
+    const actionLabel = has
+      ? (equipped ? 'Equipado' : 'Equipar')
+      : `<span class="btn-inline-label"><span>Comprar</span> ${coinMini} <span>${item.price.toLocaleString('pt-BR')}</span></span>`;
 
     return `
       <article class="menu-item ${equipped ? 'is-equipped' : ''}">
@@ -417,8 +423,8 @@ function renderItems() {
           ${levelInfo}
         </div>
         <div class="item-actions">
-          ${has && item.id === 'phantom' && upgradeCost ? `<button type="button" class="secondary-btn upgrade-btn" data-upgrade="phantom">Melhorar Nv.${level + 1} · 🪙 ${upgradeCost.toLocaleString('pt-BR')}</button>` : ''}
-          <button type="button" class="${has ? 'secondary-btn' : 'primary-btn'}" data-item="${item.id}" ${equipped ? 'disabled' : ''}>${actionLabel}</button>
+          ${has && item.id === 'phantom' && upgradeCost ? `<button type="button" class="secondary-btn upgrade-btn" data-upgrade="phantom"><span class="btn-inline-label"><span>Melhorar Nv.${level + 1}</span> ${coinMini} <span>${upgradeCost.toLocaleString('pt-BR')}</span></span></button>` : ''}
+          <button type="button" class="${has ? 'secondary-btn' : 'primary-btn'} cyber-btn" data-item="${item.id}" ${equipped ? 'disabled' : ''}>${actionLabel}</button>
         </div>
       </article>
     `;
@@ -439,6 +445,7 @@ function renderItems() {
         }
         ECONOMY.spendCoins(item.price);
         arr.push(item.id);
+        if (typeof MISSIONS !== 'undefined') MISSIONS.syncUnlockCount();
         showPowerFeedback(`${item.name} adquirido!`);
       } else {
         showPowerFeedback(`${item.name} equipado!`, true, false);
@@ -508,7 +515,7 @@ function renderOptions() {
 
       <section class="options-panel-card">
         <div class="options-panel-header">
-          <h3>🔊 Áudio e Efeitos</h3>
+          <h3 class="heading-with-icon">${getSvgIcon('icon-audio', 18)}<span>Áudio e Efeitos</span></h3>
           <p>Controle o volume dos sons e apitos da partida</p>
         </div>
         <div class="volume-control-row">
@@ -526,7 +533,7 @@ function renderOptions() {
 
       <section class="options-panel-card">
         <div class="options-panel-header">
-          <h3>🎮 Controles</h3>
+          <h3 class="heading-with-icon">${getSvgIcon('icon-gamepad', 18)}<span>Controles</span></h3>
           <p>Clique para remapear as teclas de Chute e Habilidade</p>
         </div>
         <div class="remap-list">
@@ -678,12 +685,150 @@ function renderOptions() {
   });
 }
 
+function renderMissions() {
+  const container = document.getElementById('menu-page-content');
+  if (!container || typeof MISSIONS === 'undefined') return;
+
+  const state = MISSIONS.load();
+  const tabs = [
+    { key: 'daily', label: 'Diárias', hint: 'Renova todo dia à 00:00 (horário local)' },
+    { key: 'weekly', label: 'Semanais', hint: 'Renova toda segunda-feira' },
+    { key: 'lifetime', label: 'De Vida', hint: 'Conquistas permanentes da conta (1x por carreira)' }
+  ];
+
+  const activeTabMeta = tabs.find(t => t.key === activeMissionTab) || tabs[0];
+
+  const tabButtonsHtml = tabs.map(tab => {
+    const isSelected = activeMissionTab === tab.key;
+    const readyCount = MISSIONS.getTabReadyCount(tab.key);
+    return `
+      <button
+        type="button"
+        role="tab"
+        id="mission-tab-${tab.key}"
+        aria-selected="${isSelected}"
+        aria-controls="mission-panel-${tab.key}"
+        data-mission-tab="${tab.key}"
+        class="mission-tab-btn"
+      >
+        <span>${tab.label}</span>
+        ${readyCount > 0 ? `<span class="mission-tab-badge">${readyCount}</span>` : ''}
+      </button>
+    `;
+  }).join('');
+
+  const tabPanelsHtml = tabs.map(tab => {
+    const isSelected = activeMissionTab === tab.key;
+    const catalog = MISSIONS_CATALOG[tab.key] || [];
+    const bucket = state[tab.key] || { progress: {}, claimed: {} };
+
+    const cardsHtml = catalog.map(m => {
+      const progress = Math.min(m.target, Math.max(0, Number(bucket.progress[m.id]) || 0));
+      const claimed = !!bucket.claimed[m.id];
+      const ready = progress >= m.target && !claimed;
+      const pct = Math.max(0, Math.min(100, Math.round((progress / m.target) * 100)));
+
+      let statusLabel = `${progress} / ${m.target}`;
+      let actionHtml = `<span class="mission-status-tag">Em progresso</span>`;
+      if (claimed) {
+        statusLabel = `${m.target} / ${m.target}`;
+        actionHtml = `<span class="mission-claimed-pill">Resgatada</span>`;
+      } else if (ready) {
+        actionHtml = `
+          <button type="button" class="mission-claim-btn" data-claim-tab="${tab.key}" data-claim-id="${m.id}">
+            Resgatar
+          </button>
+        `;
+      }
+
+      return `
+        <article class="mission-card ${ready ? 'is-ready' : ''} ${claimed ? 'is-claimed' : ''}">
+          <div class="mission-card-main">
+            <div class="mission-card-head">
+              <h3>${m.title}</h3>
+              <span class="mission-reward-pill" title="Recompensa em Lito Coins">
+                ${getSvgIcon('icon-litocoin', 15, 'svg-coin-icon')}
+                <span>+${m.reward.toLocaleString('pt-BR')}</span>
+              </span>
+            </div>
+            <p class="mission-card-desc">${m.desc}</p>
+            <div class="mission-progress-row">
+              <div class="mission-progress-bar" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="${m.target}">
+                <div class="mission-progress-fill" style="width:${pct}%"></div>
+              </div>
+              <span class="mission-progress-count">${statusLabel}</span>
+            </div>
+          </div>
+          <div class="mission-card-action">
+            ${actionHtml}
+          </div>
+        </article>
+      `;
+    }).join('');
+
+    return `
+      <div
+        id="mission-panel-${tab.key}"
+        role="tabpanel"
+        aria-labelledby="mission-tab-${tab.key}"
+        class="mission-panel"
+        ${isSelected ? '' : 'hidden'}
+      >
+        <div class="missions-list">
+          ${cardsHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="missions-shell">
+      <div class="missions-topbar">
+        <div class="missions-tabs" role="tablist" aria-label="Categorias de missões">
+          ${tabButtonsHtml}
+        </div>
+        <div class="missions-reset-note">${activeTabMeta.hint}</div>
+      </div>
+      ${tabPanelsHtml}
+    </div>
+  `;
+
+  container.querySelectorAll('[data-mission-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeMissionTab = btn.dataset.missionTab;
+      renderMissions();
+    });
+  });
+
+  container.querySelectorAll('[data-claim-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabKey = btn.dataset.claimTab;
+      const missionId = btn.dataset.claimId;
+      const claimedMission = MISSIONS.claim(tabKey, missionId);
+      if (claimedMission && claimedMission.reward > 0) {
+        if (typeof Sound !== 'undefined' && Sound.playGoal) {
+          Sound.init();
+          Sound.playGoal();
+        }
+        showPowerFeedback(`${claimedMission.title}: +${claimedMission.reward.toLocaleString('pt-BR')} Lito Coins!`);
+        const pageCoinEl = document.getElementById('page-coin-count');
+        if (pageCoinEl) pageCoinEl.textContent = ECONOMY.getCoins().toLocaleString('pt-BR');
+        renderMissions();
+      }
+    });
+  });
+}
+
 function renderCredits() {
   const container = document.getElementById('menu-page-content');
   if (!container) return;
 
   container.innerHTML = `
-    <div class="credits-spacer" aria-hidden="true"></div>
+    <section class="credits-hero">
+      <div class="credits-hero-badge">LITOBALL &bull; CYBER-ARCADE EDITION</div>
+      <h3>Futebol de Botão Tático em Tempo Real</h3>
+      <p>Construído com HTML5 Canvas 2D procedural, física dedicada, habilidades autorais e IA estratégica em 1v1 e 2v2.</p>
+    </section>
     <div class="credits-grid">
       <article class="credit-card">
         <span class="credit-role">Criador &amp; Direção</span>
@@ -698,7 +843,7 @@ function renderCredits() {
       <article class="credit-card">
         <span class="credit-role">Engenharia &amp; Assistência</span>
         <h3>Codex &amp; Antigravity</h3>
-        <p>Modularização de arquitetura, remodelação de IAs 2v2, rework visual e habilidades especiais.</p>
+        <p>Modularização de arquitetura, remodelação de IAs 2v2, rework visual, missões e animações procedurais.</p>
       </article>
     </div>
   `;
@@ -713,12 +858,13 @@ function updateFullscreenUI() {
   const active = isFullscreenActive();
   const hudBtn = document.getElementById('btn-fullscreen');
   const menuBtn = document.getElementById('menu-fullscreen-btn');
+  const fsIcon = getSvgIcon(active ? 'icon-exit-fullscreen' : 'icon-fullscreen', 14);
   if (hudBtn) {
-    hudBtn.textContent = active ? '⛶ Sair' : '⛶ Tela';
+    hudBtn.innerHTML = `${fsIcon}<span>${active ? 'Sair' : 'Tela'}</span>`;
     hudBtn.title = active ? 'Sair da Tela Cheia' : 'Ativar Tela Cheia';
   }
   if (menuBtn) {
-    menuBtn.textContent = active ? '⛶ Sair da Tela Cheia' : '⛶ Tela Cheia';
+    menuBtn.innerHTML = `${getSvgIcon(active ? 'icon-exit-fullscreen' : 'icon-fullscreen', 15)}<span>${active ? 'Sair da Tela Cheia' : 'Tela Cheia'}</span>`;
     menuBtn.title = active ? 'Sair da Tela Cheia' : 'Ativar Tela Cheia';
   }
 }
@@ -786,6 +932,16 @@ function initUI() {
     updatePlayerPreview();
   });
 
+  document.querySelectorAll('input[name="pitch-theme"]').forEach(radio => {
+    radio.checked = radio.value === (profile.pitchTheme || 'classic');
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      profile.pitchTheme = radio.value;
+      persistProfile();
+      if (typeof redrawIdlePitchScene === 'function') redrawIdlePitchScene();
+    });
+  });
+
   document.querySelectorAll('.menu-nav-row [data-view]').forEach(button => {
     button.addEventListener('click', () => showFeaturePage(button.dataset.view));
   });
@@ -810,5 +966,6 @@ function initUI() {
   updatePlayerPreview();
   updateControlHintsUI();
   updateCoinUI();
+  if (typeof updateMissionsBadgeUI === 'function') updateMissionsBadgeUI();
   syncModalInertState();
 }

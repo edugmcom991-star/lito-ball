@@ -5,157 +5,8 @@
  */
 'use strict';
 
-let twoOneSelection = null;
-let twoOnePlay = null;
-let twoOneImpactTimer = 0;
 let visionPassRoute = null;
 let powerReadyLast = true;
-const pistolAnimations = [];
-const pistolSpriteFrames = [];
-const PISTOL_FRAME_WIDTH = 320;
-const PISTOL_FRAME_HEIGHT = 240;
-const PISTOL_PIVOT_X = 100;
-const PISTOL_PIVOT_Y = 112;
-// Preparação, alinhamento, clarão, recuo e fumaça final.
-const PISTOL_FRAME_DURATIONS = [0.03, 0.02, 0.07, 0.13, 0.22];
-// Recortes medidos na imagem original; os pivôs mantêm o tambor alinhado entre quadros.
-const PISTOL_FRAME_SPECS = [
-  { x: 32, y: 237, width: 175, height: 118, pivotX: 108, pivotY: 266 },
-  { x: 228, y: 237, width: 180, height: 118, pivotX: 307, pivotY: 267 },
-  { x: 420, y: 178, width: 225, height: 177, pivotX: 474, pivotY: 261 },
-  { x: 650, y: 145, width: 149, height: 210, pivotX: 700, pivotY: 258 },
-  { x: 818, y: 145, width: 188, height: 210, pivotX: 921, pivotY: 265 }
-];
-const PISTOL_FRAME_NUMBER_RECTS = [
-  { left: 18, top: 197, right: 40, bottom: 222 },
-  { left: 215, top: 197, right: 238, bottom: 222 },
-  { left: 416, top: 197, right: 440, bottom: 222 },
-  { left: 615, top: 197, right: 639, bottom: 222 },
-  { left: 814, top: 197, right: 840, bottom: 222 }
-];
-
-assets.loadSprite('pistolSheet', 'img/pistola.png').then(preparePistolFrames).catch(() => {});
-
-function preparePistolFrames(sheet) {
-  const sourceCanvas = document.createElement('canvas');
-  sourceCanvas.width = sheet.naturalWidth;
-  sourceCanvas.height = sheet.naturalHeight;
-  const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
-  sourceCtx.drawImage(sheet, 0, 0);
-  const source = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
-  const background = { r: 62, g: 65, b: 73 };
-
-  for (let frameIndex = 0; frameIndex < PISTOL_FRAME_SPECS.length; frameIndex++) {
-    const spec = PISTOL_FRAME_SPECS[frameIndex];
-    const frameCanvas = document.createElement('canvas');
-    frameCanvas.width = PISTOL_FRAME_WIDTH;
-    frameCanvas.height = PISTOL_FRAME_HEIGHT;
-    const frameCtx = frameCanvas.getContext('2d');
-    const frame = frameCtx.createImageData(PISTOL_FRAME_WIDTH, PISTOL_FRAME_HEIGHT);
-    const offsetX = PISTOL_PIVOT_X - (spec.pivotX - spec.x);
-    const offsetY = PISTOL_PIVOT_Y - (spec.pivotY - spec.y);
-
-    for (let sourceY = spec.y; sourceY < spec.y + spec.height; sourceY++) {
-      for (let sourceX = spec.x; sourceX < spec.x + spec.width; sourceX++) {
-        const x = offsetX + sourceX - spec.x;
-        const y = offsetY + sourceY - spec.y;
-        if (x < 0 || x >= PISTOL_FRAME_WIDTH || y < 0 || y >= PISTOL_FRAME_HEIGHT) continue;
-
-        const sourceIndex = (sourceY * source.width + sourceX) * 4;
-        const frameIndexOffset = (y * PISTOL_FRAME_WIDTH + x) * 4;
-        const r = source.data[sourceIndex];
-        const g = source.data[sourceIndex + 1];
-        const b = source.data[sourceIndex + 2];
-        const deltaR = r - background.r;
-        const deltaG = g - background.g;
-        const deltaB = b - background.b;
-        const backgroundDistance = Math.hypot(deltaR, deltaG, deltaB);
-        const numberRect = PISTOL_FRAME_NUMBER_RECTS[frameIndex];
-        const isNumberLabel = sourceX >= numberRect.left && sourceX <= numberRect.right && sourceY >= numberRect.top && sourceY <= numberRect.bottom;
-        const isPanelRule = ((sourceY >= 196 && sourceY <= 198) ||
-          (sourceX >= 206 && sourceX <= 208) ||
-          (sourceX >= 606 && sourceX <= 610) ||
-          (sourceX >= 796 && sourceX <= 802) ||
-          (sourceX >= 1004 && sourceX <= 1008)) && Math.hypot(r - 35, g - 39, b - 44) < 15;
-
-        let alpha = source.data[sourceIndex + 3];
-        if (isNumberLabel || isPanelRule || backgroundDistance <= 14) {
-          alpha = 0;
-        } else if (backgroundDistance < 27) {
-          alpha = Math.round(alpha * (backgroundDistance - 14) / 13);
-        }
-
-        frame.data[frameIndexOffset] = r;
-        frame.data[frameIndexOffset + 1] = g;
-        frame.data[frameIndexOffset + 2] = b;
-        frame.data[frameIndexOffset + 3] = alpha;
-      }
-    }
-    frameCtx.putImageData(frame, 0, 0);
-    pistolSpriteFrames.push(frameCanvas);
-  }
-}
-
-function playPistolAnimation(actor, dirX, dirY) {
-  const angle = Math.atan2(dirY, dirX);
-  const side = -actor.radius * 1.9;
-  const forward = actor.radius * 0.42;
-  const perpendicularX = -Math.sin(angle);
-  const perpendicularY = Math.cos(angle);
-  pistolAnimations.push({
-    x: actor.x + Math.cos(angle) * forward + perpendicularX * side,
-    y: actor.y + Math.sin(angle) * forward + perpendicularY * side,
-    angle,
-    elapsed: 0,
-    frame: 0
-  });
-  ball.pistolTrailTimer = 0.62;
-  ball.pistolShotTrail.length = 0;
-}
-
-function updatePistolAnimations(dt) {
-  if (!pistolSpriteFrames.length) return;
-  for (let i = pistolAnimations.length - 1; i >= 0; i--) {
-    const animation = pistolAnimations[i];
-    animation.elapsed += dt;
-    while (animation.frame < PISTOL_FRAME_DURATIONS.length && animation.elapsed >= PISTOL_FRAME_DURATIONS[animation.frame]) {
-      animation.elapsed -= PISTOL_FRAME_DURATIONS[animation.frame];
-      animation.frame++;
-    }
-    if (animation.frame >= PISTOL_FRAME_DURATIONS.length) pistolAnimations.splice(i, 1);
-  }
-}
-
-function clearPistolAnimations() {
-  pistolAnimations.length = 0;
-}
-
-function drawPistolAnimations(renderCtx) {
-  if (!pistolSpriteFrames.length) return;
-  renderCtx.save();
-  renderCtx.imageSmoothingEnabled = false;
-  for (const animation of pistolAnimations) {
-    const frame = pistolSpriteFrames[animation.frame];
-    if (!frame) continue;
-    renderCtx.save();
-    renderCtx.translate(animation.x, animation.y);
-    renderCtx.rotate(animation.angle);
-    if (animation.frame === pistolSpriteFrames.length - 1) {
-      const duration = PISTOL_FRAME_DURATIONS[animation.frame];
-      renderCtx.globalAlpha = Math.max(0, 1 - animation.elapsed / duration);
-    }
-    const scale = 0.46;
-    renderCtx.drawImage(
-      frame,
-      -PISTOL_PIVOT_X * scale,
-      -PISTOL_PIVOT_Y * scale,
-      PISTOL_FRAME_WIDTH * scale,
-      PISTOL_FRAME_HEIGHT * scale
-    );
-    renderCtx.restore();
-  }
-  renderCtx.restore();
-}
 function phantomLevelFor(actor) {
   return actor.isHuman ? Math.max(1, Math.min(3, Number(profile.powerLevels.phantom) || 1)) : 1;
 }
@@ -229,6 +80,7 @@ function updatePlayerDribbleControl(actor) {
   if (
     actor.tackleStaggerTimer > 0 ||
     actor.powerEffect === 'phantom' ||
+    (typeof twoOnePlay !== 'undefined' && twoOnePlay && (actor === twoOnePlay.owner || actor === twoOnePlay.target)) ||
     ball.curveTimer > 0 ||
     ball.powerShotTimer > 0 ||
     (ball.dribbleLockTimer > 0 && ball.dribbleLockOwner === actor) ||
@@ -427,214 +279,6 @@ function drawVisionLongPassPreview(renderCtx) {
   renderCtx.restore();
 }
 
-function getTwoOneEligibleTargets(actor) {
-  if (gameMode === 'match') return [];
-  const target = homeMate;
-  const distance = Math.hypot(target.x - actor.x, target.y - actor.y);
-  const pitch = CONFIG.pitch;
-  const opponents = [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
-  if (distance > 230 || opponents.some(opponent => Math.hypot(target.x - opponent.x, target.y - opponent.y) < opponent.radius + target.radius + 24)) return [];
-  if (target.x - target.radius < pitch.left + 8 || target.x + target.radius > pitch.right - 8 || target.y - target.radius < pitch.top + 8 || target.y + target.radius > pitch.bottom - 8) return [];
-  if (isPassPathBlocked(ball, target, actor)) return [];
-  return [target];
-}
-
-function projectTwoOneReceiver(ballSpeed) {
-  let dirX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  let dirY = (input.down ? 1 : 0) - (input.up ? 1 : 0);
-  const hasMoveInput = !!(dirX || dirY);
-  if (hasMoveInput) {
-    const length = Math.hypot(dirX, dirY);
-    dirX /= length;
-    dirY /= length;
-  } else if (twoOnePlay) {
-    dirX = twoOnePlay.runDirection.x;
-    dirY = twoOnePlay.runDirection.y;
-  } else {
-    const speed = Math.hypot(player1.vx, player1.vy);
-    if (speed > 0.55) {
-      dirX = player1.vx / speed;
-      dirY = player1.vy / speed;
-    } else {
-      dirX = player1.facingX;
-      dirY = player1.facingY;
-    }
-  }
-  const velocityAlongRun = player1.vx * dirX + player1.vy * dirY;
-  const projectedSpeed = hasMoveInput && !twoOnePlay ? Math.max(CONFIG.physics.playerMaxSpeed, velocityAlongRun) : Math.max(0, velocityAlongRun);
-  const gap = Math.hypot(player1.x - ball.x, player1.y - ball.y);
-  const frames = Math.max(4, Math.min(120, gap / Math.max(1.8, ballSpeed - projectedSpeed)));
-  const p = CONFIG.pitch;
-  const lead = projectedSpeed * frames + (twoOnePlay ? 22 : 10);
-  return {
-    x: Math.max(p.left + player1.radius, Math.min(p.right - player1.radius, player1.x + dirX * lead)),
-    y: Math.max(p.top + player1.radius, Math.min(p.bottom - player1.radius, player1.y + dirY * lead))
-  };
-}
-
-function chooseTwoOneRunDirection(actor) {
-  const base = Math.atan2(actor.facingY, actor.facingX);
-  const directions = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3].map(offset => ({
-    x: Math.cos(base + offset),
-    y: Math.sin(base + offset),
-    turn: Math.abs(offset)
-  }));
-  const pitch = CONFIG.pitch;
-  const clear = d => {
-    const tx = actor.x + d.x * 100;
-    const ty = actor.y + d.y * 100;
-    if (tx < pitch.left + actor.radius || tx > pitch.right - actor.radius || ty < pitch.top + actor.radius || ty > pitch.bottom - actor.radius) return false;
-    if ([player2, ...(gameMode === '2v2' ? [awayMate] : [])].some(opponent => pointSegmentDistance(opponent.x, opponent.y, actor.x, actor.y, tx, ty) < actor.radius + opponent.radius + 8)) return false;
-    if (pointSegmentDistance(homeMate.x, homeMate.y, actor.x, actor.y, tx, ty) < actor.radius + homeMate.radius + 6) return false;
-    return posts.every(post => pointSegmentDistance(post.x, post.y, actor.x, actor.y, tx, ty) > actor.radius + post.radius + 5);
-  };
-  const valid = directions.filter(clear);
-  if (!valid.length) return { x: actor.facingX, y: actor.facingY };
-  return valid.sort((a, b) => {
-    const score = d =>
-      Math.hypot(actor.x + d.x * 100 - player2.x, actor.y + d.y * 100 - player2.y) * 0.18 +
-      Math.hypot(actor.x + d.x * 100 - homeMate.x, actor.y + d.y * 100 - homeMate.y) * 0.08 -
-      d.turn * 100;
-    return score(b) - score(a);
-  })[0];
-}
-
-function confirmTwoOneSelection() {
-  if (!twoOneSelection) return false;
-  const target = twoOneSelection.target;
-  const eligible = getTwoOneEligibleTargets(player1);
-  if (!isBallControlledBy(player1) || !eligible.includes(target)) {
-    twoOneSelection = null;
-    showPowerFeedback('O alvo ficou indisponível; Toque e Passa cancelado', true);
-    return false;
-  }
-  if (isPassPathBlocked(ball, target, player1)) {
-    twoOneSelection = null;
-    showPowerFeedback('Linha bloqueada; Toque e Passa cancelado', true);
-    return false;
-  }
-  if (!player1.tryKick(ball, 0, 0, true, target)) {
-    twoOneSelection = null;
-    showPowerFeedback('Aguarde para dominar a bola antes da tabela', true);
-    return false;
-  }
-  ball.vx *= 0.50;
-  ball.vy *= 0.50;
-  player1.powerCooldown = POWER_COOLDOWNS.twoOne;
-  player1.powerEffect = 'twoOne';
-  player1.powerEffectTimer = 0;
-  const run = chooseTwoOneRunDirection(player1);
-  twoOnePlay = { phase: 'outbound', target, timer: 2.5, runDirection: { x: run.x, y: run.y }, runTimer: 0.58, trail: [] };
-  input.up = false;
-  input.down = false;
-  input.left = false;
-  input.right = false;
-  input.kickRequested = false;
-  input.passRequested = false;
-  player1.vx = 0;
-  player1.vy = 0;
-  twoOneSelection = null;
-  showPowerFeedback('Toque e Passa! Arranque para receber', false);
-  return true;
-}
-
-function finishTwoOne(success, message) {
-  if (!twoOnePlay) return;
-  if (success && gameMode === '2v2' && twoVtwoStats) twoVtwoStats.completed.twoOne = true;
-  twoOnePlay = null;
-  player1.powerEffect = null;
-  player1.powerEffectTimer = 0;
-  twoOneImpactTimer = success ? 0.32 : 0;
-  if (message) showPowerFeedback(message, !success);
-}
-
-function updateTwoOneState(dt) {
-  if (twoOneSelection) {
-    twoOneSelection.timer -= dt;
-    if (twoOneSelection.timer <= 0) {
-      twoOneSelection = null;
-      showPowerFeedback('Seleção de alvo cancelada', true);
-    }
-  }
-  if (twoOneImpactTimer > 0) twoOneImpactTimer = Math.max(0, twoOneImpactTimer - dt);
-  if (!twoOnePlay) return;
-  const play = twoOnePlay;
-  play.timer -= dt;
-  const speed = Math.hypot(ball.vx, ball.vy);
-  if (speed > 1) {
-    play.trail.push({ x: ball.x, y: ball.y });
-    if (play.trail.length > 11) play.trail.shift();
-  } else if (play.trail.length) {
-    play.trail.shift();
-  }
-
-  if (play.phase === 'return') {
-    if (isBallReceivedBy(player1)) {
-      finishTwoOne(true, 'Tabela concluída!');
-      return;
-    }
-    const distanceToReceiver = Math.hypot(ball.x - player1.x, ball.y - player1.y);
-    const receiveRadius = player1.radius + ball.radius + 24;
-    if (distanceToReceiver <= receiveRadius) {
-      play.returnApproachStarted = true;
-      play.returnNearTimer = (play.returnNearTimer || 0) + dt;
-      if (play.returnNearTimer > 0.18) {
-        finishTwoOne(false, 'A devolução não chegou controlada; siga a jogada');
-        return;
-      }
-    } else if (play.returnApproachStarted) {
-      finishTwoOne(false, 'A devolução passou; siga a jogada');
-      return;
-    }
-  }
-
-  if (play.phase === 'receiveWait') {
-    if (isBallReceivedBy(play.target)) {
-      play.receiveLostTimer = 0;
-      play.waitTimer = Math.max(0, play.waitTimer - dt);
-    } else {
-      play.receiveLostTimer = (play.receiveLostTimer || 0) + dt;
-      const distance = Math.hypot(ball.x - play.target.x, ball.y - play.target.y);
-      if (distance > play.target.radius + ball.radius + 24 || play.receiveLostTimer > 0.18) {
-        finishTwoOne(false, 'O companheiro perdeu a bola; jogada encerrada');
-        return;
-      }
-    }
-  }
-
-  if (gameMode !== 'training' && (isBallControlledBy(player2) || (gameMode === '2v2' && isBallControlledBy(awayMate)))) {
-    finishTwoOne(false, 'Passe interceptado; jogada encerrada');
-    return;
-  }
-  if (play.timer <= 0 || (ball.curveTimer > 0 && play.phase === 'return')) {
-    finishTwoOne(false, 'A tabela não encaixou; siga a jogada');
-  }
-}
-
-function updateTwoOneReturnAssist(dt) {
-  if (!twoOnePlay || twoOnePlay.phase !== 'return' || twoOnePlay.returnAssistTimer <= 0) return;
-  const speed = Math.hypot(ball.vx, ball.vy);
-  if (speed < 2) return;
-  twoOnePlay.returnAssistTimer = Math.max(0, twoOnePlay.returnAssistTimer - dt);
-  const target = projectTwoOneReceiver(speed);
-  if (isPassPathBlocked(ball, target, homeMate)) {
-    finishTwoOne(false, 'Passe de retorno bloqueado; a bola segue');
-    return;
-  }
-  if (twoOnePlay.returnTurnBudget <= 0) return;
-  const dx = target.x - ball.x;
-  const dy = target.y - ball.y;
-  const angle = Math.atan2(ball.vx * dy - ball.vy * dx, ball.vx * dx + ball.vy * dy);
-  const turn = Math.sign(angle) * Math.min(Math.abs(angle), 0.035, twoOnePlay.returnTurnBudget);
-  const cos = Math.cos(turn);
-  const sin = Math.sin(turn);
-  const vx = ball.vx;
-  const vy = ball.vy;
-  ball.vx = vx * cos - vy * sin;
-  ball.vy = vx * sin + vy * cos;
-  twoOnePlay.returnTurnBudget -= Math.abs(turn);
-}
-
 function updateVisionPassAssist(dt) {
   if (ball.visionPassAssistTimer <= 0) return;
   ball.visionPassAssistTimer = Math.max(0, ball.visionPassAssistTimer - dt);
@@ -767,8 +411,7 @@ function applyPower(id, actor) {
     actor.powerEffect ||
     actor.nextKickPower !== 1 ||
     actor.nextKickReach !== 1 ||
-    twoOneSelection ||
-    twoOnePlay ||
+    (typeof twoOnePlay !== 'undefined' && twoOnePlay) ||
     snakeTackles.some(tackle => tackle.owner === actor)
   ) return false;
 
@@ -780,18 +423,7 @@ function applyPower(id, actor) {
   const nearBallControl = Math.hypot(ball.x - actor.x, ball.y - actor.y) <= actor.radius + ball.radius + 62;
 
   if (id === 'twoOne') {
-    if (actor !== player1 || !isBallControlledBy(actor)) {
-      if (actor.isHuman) showPowerFeedback('Domine a bola para iniciar Toque e Passa', true);
-      return false;
-    }
-    const targets = getTwoOneEligibleTargets(actor);
-    if (!targets.length) {
-      showPowerFeedback('Nenhum companheiro próximo e livre para Toque e Passa', true);
-      return false;
-    }
-    twoOneSelection = { target: targets[0], timer: 3 };
-    showPowerFeedback('Alvo: companheiro · pressione F ou clique nele', true);
-    return true;
+    return typeof startTwoOne === 'function' ? startTwoOne(actor) : false;
   }
 
   const nearBallCurve = Math.hypot(ball.x - actor.x, ball.y - actor.y) <= actor.radius + ball.radius + 54;
@@ -900,13 +532,15 @@ function applyPower(id, actor) {
     : (id === 'phantom' ? phantomStats(actor).cooldown : (POWER_COOLDOWNS[id] || 12));
 
   if (actor.isHuman) {
+    if (typeof MISSIONS !== 'undefined') MISSIONS.recordPowerUsed();
     const customFeed =
-      id === 'curve' ? '🌀 Curva Impossível! Mire e aperte Chute (ou Clique)' :
-      id === 'control' ? '🧲 Domínio Perfeito! Bola dominada no pé' :
-      id === 'eagle' ? '🦅 Salto de Águia armado (6s)' :
-      id === 'sniper' ? '🎯 Instinto de Artilheiro armado (6s)' :
-      id === 'shadow' ? '👥 Sombra do Marcador ativa (4s)' :
-      id === 'ego' ? '🔥 Despertar do Ego ativo (5s)' :
+      id === 'cannon' ? 'Chute de Pistola armado · finalize!' :
+      id === 'curve' ? 'Curva Impossível! Mire e aperte Chute (ou Clique)' :
+      id === 'control' ? 'Domínio Perfeito! Bola dominada no pé' :
+      id === 'eagle' ? 'Salto de Águia armado (6s)' :
+      id === 'sniper' ? 'Instinto de Artilheiro armado (6s)' :
+      id === 'shadow' ? 'Sombra do Marcador ativa (4s)' :
+      id === 'ego' ? 'Despertar do Ego ativo (5s)' :
       `${POWER_LABELS[id]} ativado`;
     showPowerFeedback(customFeed, false, !['cannon', 'sprint', 'phantom', 'curve'].includes(id));
   } else {
@@ -1033,74 +667,6 @@ function drawTwoVtwoVisionGuidance(renderCtx) {
   renderCtx.restore();
 }
 
-function drawTwoOneVisuals(renderCtx) {
-  if (!twoOneSelection && !twoOnePlay && twoOneImpactTimer <= 0) return;
-  renderCtx.save();
-  renderCtx.lineCap = 'round';
-  renderCtx.lineJoin = 'round';
-
-  if (twoOneSelection) {
-    const target = twoOneSelection.target;
-    const alpha = 0.55 + Math.sin(performance.now() / 90) * 0.18;
-    renderCtx.globalAlpha = alpha;
-    renderCtx.strokeStyle = '#67e8f9';
-    renderCtx.fillStyle = '#a5f3fc';
-    renderCtx.lineWidth = 3;
-    renderCtx.setLineDash([9, 7]);
-    renderCtx.beginPath();
-    renderCtx.moveTo(player1.x, player1.y);
-    renderCtx.lineTo(target.x, target.y);
-    renderCtx.stroke();
-    renderCtx.setLineDash([]);
-    renderCtx.beginPath();
-    renderCtx.arc(target.x, target.y, target.radius + 13, 0, Math.PI * 2);
-    renderCtx.stroke();
-    const angle = Math.atan2(target.y - player1.y, target.x - player1.x);
-    renderCtx.beginPath();
-    renderCtx.moveTo(target.x, target.y);
-    renderCtx.lineTo(target.x - Math.cos(angle - 0.48) * 14, target.y - Math.sin(angle - 0.48) * 14);
-    renderCtx.lineTo(target.x - Math.cos(angle + 0.48) * 14, target.y - Math.sin(angle + 0.48) * 14);
-    renderCtx.closePath();
-    renderCtx.fill();
-  }
-
-  if (twoOnePlay) {
-    const points = twoOnePlay.trail;
-    for (let i = 1; i < points.length; i++) {
-      const t = i / points.length;
-      renderCtx.beginPath();
-      renderCtx.moveTo(points[i - 1].x, points[i - 1].y);
-      renderCtx.lineTo(points[i].x, points[i].y);
-      renderCtx.strokeStyle = `rgba(103, 232, 249, ${t * 0.32})`;
-      renderCtx.lineWidth = 1 + t * 2;
-      renderCtx.stroke();
-    }
-    if (twoOnePlay.runTimer > 0) {
-      renderCtx.strokeStyle = 'rgba(103, 232, 249, 0.45)';
-      renderCtx.lineWidth = 2;
-      renderCtx.setLineDash([4, 5]);
-      renderCtx.beginPath();
-      renderCtx.arc(player1.x, player1.y, player1.radius + 7, 0, Math.PI * 2);
-      renderCtx.stroke();
-      renderCtx.setLineDash([]);
-    }
-  }
-
-  if (twoOneImpactTimer > 0) {
-    const progress = 1 - twoOneImpactTimer / 0.32;
-    renderCtx.globalAlpha = 1 - progress;
-    renderCtx.strokeStyle = '#a5f3fc';
-    renderCtx.shadowColor = '#22d3ee';
-    renderCtx.shadowBlur = 14;
-    renderCtx.lineWidth = 3;
-    renderCtx.beginPath();
-    renderCtx.arc(ball.x, ball.y, ball.radius + 4 + progress * 14, 0, Math.PI * 2);
-    renderCtx.stroke();
-  }
-
-  renderCtx.restore();
-}
-
 /**
  * Desenha auras e indicadores táticos de habilidades ativas no campo
  * (Domínio Perfeito, Salto de Águia, Instinto de Artilheiro, Sombra do Marcador e Despertar do Ego).
@@ -1114,6 +680,23 @@ function drawSkillAuras(renderCtx) {
 
   for (const actor of actors) {
     if (!actor) continue;
+
+    // 0. Chute de Pistola armado: aura âmbar/laranja pulsante indicando disparo carregado
+    if ((actor.nextKickPower || 1) > 1.5) {
+      const pulse = 0.6 + Math.sin(now / 90) * 0.25;
+      renderCtx.save();
+      renderCtx.globalAlpha = pulse;
+      renderCtx.strokeStyle = '#fb923c';
+      renderCtx.shadowColor = '#f97316';
+      renderCtx.shadowBlur = 14;
+      renderCtx.lineWidth = 2.6;
+      renderCtx.setLineDash([6, 4]);
+      renderCtx.beginPath();
+      renderCtx.arc(actor.x, actor.y, actor.radius + 7, 0, Math.PI * 2);
+      renderCtx.stroke();
+      renderCtx.setLineDash([]);
+      renderCtx.restore();
+    }
 
     // 1. Domínio Perfeito: onda de amortecimento esmeralda
     if (actor.controlPulseTimer > 0) {

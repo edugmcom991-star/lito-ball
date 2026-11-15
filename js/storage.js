@@ -53,6 +53,7 @@ const ECONOMY = {
       powerLevels: {},
       equippedShirt: 'classic',
       equippedPower: null,
+      pitchTheme: 'classic',
       volume: 70,
       muted: false,
       color: '#2b70f6',
@@ -178,3 +179,180 @@ function persistProfile() {
   updateCoinUI();
   if (typeof updatePowerHud === 'function') updatePowerHud();
 }
+
+/* ==========================================================================
+   SISTEMA DE MISSÕES (DIÁRIAS, SEMANAIS E DE VIDA)
+   ========================================================================== */
+
+const MISSIONS = {
+  LS_KEY: 'litoBall_missions',
+
+  getLocalDateKey() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
+  getLocalWeekKey() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    // Âncora na segunda-feira da semana local
+    const dayOffset = (d.getDay() + 6) % 7;
+    d.setDate(d.getDate() - dayOffset);
+    const y = d.getFullYear();
+    const jan1 = new Date(y, 0, 1);
+    const diffDays = Math.floor((d - jan1) / 86400000);
+    const weekNum = Math.floor(diffDays / 7) + 1;
+    return `${y}-W${String(weekNum).padStart(2, '0')}`;
+  },
+
+  _freshBucket() {
+    return { progress: {}, claimed: {} };
+  },
+
+  load() {
+    const todayKey = this.getLocalDateKey();
+    const weekKey = this.getLocalWeekKey();
+    let data = null;
+    try {
+      const raw = localStorage.getItem(this.LS_KEY);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!data || typeof data !== 'object') {
+      data = {
+        dailyKey: todayKey,
+        weeklyKey: weekKey,
+        daily: this._freshBucket(),
+        weekly: this._freshBucket(),
+        lifetime: this._freshBucket()
+      };
+    }
+
+    let changed = false;
+    if (data.dailyKey !== todayKey || !data.daily) {
+      data.dailyKey = todayKey;
+      data.daily = this._freshBucket();
+      changed = true;
+    }
+    if (data.weeklyKey !== weekKey || !data.weekly) {
+      data.weeklyKey = weekKey;
+      data.weekly = this._freshBucket();
+      changed = true;
+    }
+    if (!data.lifetime) {
+      data.lifetime = this._freshBucket();
+      changed = true;
+    }
+
+    for (const tab of ['daily', 'weekly', 'lifetime']) {
+      data[tab].progress = data[tab].progress || {};
+      data[tab].claimed = data[tab].claimed || {};
+    }
+
+    // Sincroniza desbloqueios da loja na missão de carreira
+    const ownedCount =
+      (Array.isArray(profile.ownedShirts) ? profile.ownedShirts.filter(s => s !== 'classic').length : 0) +
+      (Array.isArray(profile.ownedPowers) ? profile.ownedPowers.length : 0);
+    if ((data.lifetime.progress.l_unlock_3 || 0) < ownedCount) {
+      data.lifetime.progress.l_unlock_3 = ownedCount;
+      changed = true;
+    }
+
+    if (changed) {
+      localStorage.setItem(this.LS_KEY, JSON.stringify(data));
+    }
+    return data;
+  },
+
+  save(data) {
+    localStorage.setItem(this.LS_KEY, JSON.stringify(data));
+    updateMissionsBadgeUI();
+  },
+
+  increment(tab, id, amount = 1) {
+    if (amount <= 0) return;
+    const data = this.load();
+    const bucket = data[tab];
+    if (!bucket) return;
+    bucket.progress[id] = (bucket.progress[id] || 0) + amount;
+    this.save(data);
+  },
+
+  syncUnlockCount() {
+    this.load();
+    updateMissionsBadgeUI();
+  },
+
+  recordGoal(mode) {
+    if (mode !== 'match' && mode !== '2v2') return;
+    this.increment('daily', 'd_goals_5', 1);
+    this.increment('weekly', 'w_goals_25', 1);
+    this.increment('lifetime', 'l_first_goal', 1);
+    this.increment('lifetime', 'l_goals_50', 1);
+  },
+
+  recordPowerUsed() {
+    this.increment('daily', 'd_powers_4', 1);
+  },
+
+  recordMatchEnd(mode, outcome) {
+    if (mode !== 'match' && mode !== '2v2') return;
+    this.increment('daily', 'd_play_2', 1);
+    this.increment('weekly', 'w_play_10', 1);
+    this.increment('lifetime', 'l_matches_25', 1);
+
+    if (outcome === 'win') {
+      this.increment('daily', 'd_win_1', 1);
+      this.increment('weekly', 'w_wins_5', 1);
+      if (mode === 'match') {
+        this.increment('lifetime', 'l_win_1v1_5', 1);
+      } else if (mode === '2v2') {
+        this.increment('weekly', 'w_win_2v2_3', 1);
+        this.increment('lifetime', 'l_win_2v2_5', 1);
+      }
+    }
+  },
+
+  claim(tab, id) {
+    const list = MISSIONS_CATALOG[tab] || [];
+    const mission = list.find(m => m.id === id);
+    if (!mission) return null;
+
+    const data = this.load();
+    const bucket = data[tab];
+    const current = bucket.progress[id] || 0;
+    if (current < mission.target || bucket.claimed[id]) return null;
+
+    bucket.claimed[id] = true;
+    this.save(data);
+    ECONOMY.addCoins(mission.reward);
+    updateCoinUI();
+    updateMissionsBadgeUI();
+    return mission;
+  },
+
+  getTabReadyCount(tab) {
+    const data = this.load();
+    const bucket = data[tab];
+    const list = MISSIONS_CATALOG[tab] || [];
+    return list.filter(m => (bucket.progress[m.id] || 0) >= m.target && !bucket.claimed[m.id]).length;
+  },
+
+  getReadyCount() {
+    return this.getTabReadyCount('daily') + this.getTabReadyCount('weekly') + this.getTabReadyCount('lifetime');
+  }
+};
+
+function updateMissionsBadgeUI() {
+  const badge = document.getElementById('missions-ready-badge');
+  if (!badge || typeof MISSIONS === 'undefined') return;
+  const count = MISSIONS.getReadyCount();
+  badge.textContent = count > 9 ? '9+' : String(count);
+  badge.hidden = count <= 0;
+}
+
+// Garante inicialização/reset de missões ao carregar
+MISSIONS.load();

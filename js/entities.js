@@ -111,7 +111,7 @@ class Player {
     const maxSpeed =
       this.snakeLungeTimer > 0 ? 9.6 :
       this.dashTimer > 0 ? 8.8 :
-      this.twoOneRunTimer > 0 ? 6.5 :
+      this.twoOneRunTimer > 0 ? 7.15 :
       this.ghostCutTimer > 0 ? 5.3 :
       CONFIG.physics.playerMaxSpeed * (
         this.powerEffect === 'sprint' ? 1.32 :
@@ -241,7 +241,7 @@ class Player {
 
       ball.vx = nx * power;
       ball.vy = ny * power;
-      if (kickMultiplier > 1.5 && !isSniperShot && !isPass && (!this.isHuman || input.kickKeyPressed) && typeof playPistolAnimation === 'function') {
+      if (kickMultiplier > 1.5 && !isSniperShot && !isPass && typeof playPistolAnimation === 'function') {
         playPistolAnimation(this, nx, ny);
       }
       if (kickMultiplier > 1.5 || isSniperShot) {
@@ -560,7 +560,10 @@ class Ball {
     if (this.pistolTrailTimer > 0) {
       this.pistolTrailTimer = Math.max(0, this.pistolTrailTimer - 1 / 60);
       this.pistolShotTrail.push({ x: this.x, y: this.y });
-      if (this.pistolShotTrail.length > 15) this.pistolShotTrail.shift();
+      if (this.pistolShotTrail.length > 22) this.pistolShotTrail.shift();
+      if (Math.hypot(this.vx, this.vy) > 4.2 && Math.random() < 0.72) {
+        addImpactSpark(this.x, this.y, Math.random() < 0.4 ? '#fde047' : '#f97316', 1, 0.85);
+      }
     } else if (this.pistolShotTrail.length) {
       this.pistolShotTrail.shift();
     }
@@ -632,14 +635,44 @@ class Ball {
         const a = this.pistolShotTrail[i - 1];
         const b = this.pistolShotTrail[i];
         const t = i / this.pistolShotTrail.length;
+        // Rastro externo flamejante de projétil
         renderCtx.beginPath();
         renderCtx.moveTo(a.x, a.y);
         renderCtx.lineTo(b.x, b.y);
-        renderCtx.strokeStyle = `rgba(251, 146, 60, ${t * 0.76})`;
-        renderCtx.lineWidth = 2 + t * 4;
+        renderCtx.strokeStyle = `rgba(249, 115, 22, ${t * 0.85})`;
+        renderCtx.lineWidth = 3 + t * 8;
         renderCtx.shadowColor = '#f97316';
-        renderCtx.shadowBlur = 5 + t * 10;
+        renderCtx.shadowBlur = 10 + t * 14;
         renderCtx.stroke();
+
+        // Núcleo incandescente branco-dourado
+        renderCtx.beginPath();
+        renderCtx.moveTo(a.x, a.y);
+        renderCtx.lineTo(b.x, b.y);
+        renderCtx.strokeStyle = `rgba(254, 240, 138, ${t * 0.92})`;
+        renderCtx.lineWidth = 1.2 + t * 3.2;
+        renderCtx.shadowBlur = 0;
+        renderCtx.stroke();
+      }
+
+      // Cone supersônico balístico à frente da bola em alta velocidade
+      const bSpeed = Math.hypot(this.vx, this.vy);
+      if (this.pistolTrailTimer > 0.22 && bSpeed > 4.2) {
+        const bAngle = Math.atan2(this.vy, this.vx);
+        renderCtx.save();
+        renderCtx.translate(this.x, this.y);
+        renderCtx.rotate(bAngle);
+        renderCtx.globalAlpha = Math.min(0.85, this.pistolTrailTimer * 1.1);
+        renderCtx.strokeStyle = '#fef08a';
+        renderCtx.shadowColor = '#f97316';
+        renderCtx.shadowBlur = 12;
+        renderCtx.lineWidth = 2.4;
+        renderCtx.beginPath();
+        renderCtx.moveTo(-this.radius * 0.65, -this.radius * 1.65);
+        renderCtx.lineTo(this.radius * 1.38, 0);
+        renderCtx.lineTo(-this.radius * 0.65, this.radius * 1.65);
+        renderCtx.stroke();
+        renderCtx.restore();
       }
       renderCtx.restore();
     }
@@ -756,6 +789,9 @@ class GoalPost {
   }
 
   draw(renderCtx) {
+    const pitchTheme = typeof profile !== 'undefined' && profile.pitchTheme ? profile.pitchTheme : 'classic';
+    const isCyberPitch = pitchTheme === 'cyber';
+    const isJurassicPitch = pitchTheme === 'jurassic';
     renderCtx.save();
     renderCtx.beginPath();
     renderCtx.arc(this.x, this.y + 2, this.radius, 0, Math.PI * 2);
@@ -764,11 +800,21 @@ class GoalPost {
 
     renderCtx.beginPath();
     renderCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    renderCtx.fillStyle = '#f8fafc';
+    if (isCyberPitch) {
+      renderCtx.shadowColor = '#38bdf8';
+      renderCtx.shadowBlur = 14;
+      renderCtx.fillStyle = '#e0f2fe';
+    } else if (isJurassicPitch) {
+      renderCtx.shadowColor = '#f59e0b';
+      renderCtx.shadowBlur = 13;
+      renderCtx.fillStyle = '#fef3c7';
+    } else {
+      renderCtx.fillStyle = '#f8fafc';
+    }
     renderCtx.fill();
 
     renderCtx.lineWidth = 2.2;
-    renderCtx.strokeStyle = '#0f172a';
+    renderCtx.strokeStyle = isCyberPitch ? '#38bdf8' : isJurassicPitch ? '#d97706' : '#0f172a';
     renderCtx.stroke();
     renderCtx.restore();
   }

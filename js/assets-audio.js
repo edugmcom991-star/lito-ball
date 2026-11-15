@@ -211,6 +211,25 @@ const Sound = {
     } catch (e) {}
   },
 
+  playPass() {
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(460, now);
+      osc.frequency.exponentialRampToValueAtTime(145, now + 0.065);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.005, now + 0.065);
+      osc.connect(gain);
+      gain.connect(this.masterGain || this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.07);
+      this.playNoiseBurst(0.032, 'bandpass', 2200, 900, 0.08);
+    } catch (e) {}
+  },
+
   playCurvedKick() {
     this.playAsset('curvedKick', this.playKick);
   },

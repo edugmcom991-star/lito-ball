@@ -28,20 +28,64 @@ const ITEMS = {
   ]
 };
 
-const SKILL_ICONS = {
-  cannon: '🔫',
-  sprint: '⚡',
-  phantom: '👻',
-  vision: '👁️',
-  curve: '🌀',
-  twoOne: '🔄',
-  snakeTackle: '🐍',
-  control: '🧲',
-  eagle: '🦅',
-  sniper: '🎯',
-  shadow: '🛡️',
-  ego: '🔥'
+function getSvgIcon(symbolId, size = 18, extraClass = '') {
+  const cls = extraClass ? `svg-icon ${extraClass}` : 'svg-icon';
+  return `<svg class="${cls}" width="${size}" height="${size}" aria-hidden="true"><use href="#${symbolId}"></use></svg>`;
+}
+
+const SKILL_ICON_IDS = {
+  cannon: 'icon-skill-cannon',
+  sprint: 'icon-skill-sprint',
+  phantom: 'icon-skill-phantom',
+  vision: 'icon-skill-vision',
+  curve: 'icon-skill-curve',
+  twoOne: 'icon-skill-twoOne',
+  snakeTackle: 'icon-skill-snakeTackle',
+  control: 'icon-skill-control',
+  eagle: 'icon-skill-eagle',
+  sniper: 'icon-skill-sniper',
+  shadow: 'icon-skill-shadow',
+  ego: 'icon-skill-ego'
 };
+
+const SKILL_ICONS = Object.fromEntries(
+  Object.entries(SKILL_ICON_IDS).map(([id, sym]) => [id, getSvgIcon(sym, 22, 'svg-skill-icon')])
+);
+
+const POWER_IMAGES = {
+  cannon: 'img/icones dos poderes/isagi.jpg',
+  sprint: 'img/icones dos poderes/chigiri.jpg',
+  phantom: 'img/icones dos poderes/bachira.jpg',
+  vision: 'img/icones dos poderes/niko.jpg',
+  curve: 'img/icones dos poderes/rin.jpg',
+  twoOne: 'img/icones dos poderes/kurona.jpg',
+  snakeTackle: 'img/icones dos poderes/aiku.jpg',
+  control: 'img/icones dos poderes/nagi.jpg',
+  eagle: 'img/icones dos poderes/aryu.jpg',
+  sniper: 'img/icones dos poderes/barou.jpg',
+  shadow: 'img/icones dos poderes/karasu.jpg',
+  ego: 'img/icones dos poderes/sae.jpg'
+};
+
+function renderPowerIconMedia(powerId, fallbackSize = 22, altText = '') {
+  const fallback = getSvgIcon(SKILL_ICON_IDS[powerId] || 'icon-bolt', fallbackSize, 'svg-skill-icon');
+  const src = POWER_IMAGES[powerId];
+  if (!src) return fallback;
+  const safeAlt = String(altText || '').replace(/"/g, '&quot;');
+  return `
+    <span class="item-power-frame">
+      <img
+        class="item-power-img"
+        src="${src}"
+        alt="${safeAlt}"
+        loading="lazy"
+        decoding="async"
+        onerror="this.hidden=true;if(this.nextElementSibling)this.nextElementSibling.hidden=false;"
+      />
+      <span class="item-power-fallback" hidden aria-hidden="true">${fallback}</span>
+    </span>
+  `;
+}
 
 const POWER_COOLDOWNS = {
   cannon: 8,
@@ -60,6 +104,56 @@ const POWER_COOLDOWNS = {
 
 const POWER_LABELS = Object.fromEntries(ITEMS.powers.map(p => [p.id, p.name]));
 const PHANTOM_UPGRADE_COSTS = { 2: 1000, 3: 1800 };
+
+const PITCH_THEMES = [
+  {
+    id: 'classic',
+    name: 'Campo Clássico',
+    subtitle: 'Grama verde tradicional',
+    accent: '#22c55e'
+  },
+  {
+    id: 'futsal',
+    name: 'Quadra de Futsal',
+    subtitle: 'Madeira envernizada de salão',
+    accent: '#f59e0b'
+  },
+  {
+    id: 'cyber',
+    name: 'Arena Futurista',
+    subtitle: 'Cyber-Arena neon holográfica',
+    accent: '#38bdf8'
+  },
+  {
+    id: 'jurassic',
+    name: 'Arena Jurássica',
+    subtitle: 'Solo vulcânico, fóssil T-Rex e âmbar',
+    accent: '#f59e0b'
+  }
+];
+
+const MISSIONS_CATALOG = {
+  daily: [
+    { id: 'd_play_2', title: 'Aquecimento na Arena', desc: 'Jogue 2 partidas oficiais (1v1 ou 2v2).', target: 2, reward: 120 },
+    { id: 'd_goals_5', title: 'Faro de Gol', desc: 'Marque 5 gols em partidas (1v1 ou 2v2).', target: 5, reward: 150 },
+    { id: 'd_powers_4', title: 'Mestre das Habilidades', desc: 'Ative qualquer poder equipado 4 vezes.', target: 4, reward: 140 },
+    { id: 'd_win_1', title: 'Vencedor do Dia', desc: 'Vença 1 partida no modo 1v1 ou 2v2.', target: 1, reward: 220 }
+  ],
+  weekly: [
+    { id: 'w_play_10', title: 'Maratona Semanal', desc: 'Complete 10 partidas oficiais na semana.', target: 10, reward: 600 },
+    { id: 'w_goals_25', title: 'Artilharia Pesada', desc: 'Marque 25 gols somados em 1v1 e 2v2.', target: 25, reward: 750 },
+    { id: 'w_wins_5', title: 'Sequência Vitoriosa', desc: 'Conquiste 5 vitórias em partidas oficiais.', target: 5, reward: 900 },
+    { id: 'w_win_2v2_3', title: 'Sintonia de Dupla', desc: 'Vença 3 partidas no modo 2v2 — Duplas.', target: 3, reward: 850 }
+  ],
+  lifetime: [
+    { id: 'l_first_goal', title: 'Primeiro Gol na História', desc: 'Marque seu 1º gol em partida oficial.', target: 1, reward: 500 },
+    { id: 'l_unlock_3', title: 'Colecionador de Elite', desc: 'Desbloqueie 3 itens (camisas ou poderes) na Loja.', target: 3, reward: 1200 },
+    { id: 'l_win_1v1_5', title: 'Rei do Duelo 1v1', desc: 'Vença 5 partidas no modo clássico 1v1.', target: 5, reward: 1500 },
+    { id: 'l_win_2v2_5', title: 'Campeão das Duplas', desc: 'Vença 5 partidas no modo 2v2.', target: 5, reward: 1800 },
+    { id: 'l_goals_50', title: 'Artilheiro Lendário', desc: 'Alcance 50 gols marcados em partidas oficiais.', target: 50, reward: 2500 },
+    { id: 'l_matches_25', title: 'Veterano do Litoball', desc: 'Conclua 25 partidas oficiais na carreira.', target: 25, reward: 3000 }
+  ]
+};
 
 const DEFAULT_CONTROLS = {
   kickKey: 'Space',

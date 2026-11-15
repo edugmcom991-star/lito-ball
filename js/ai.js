@@ -625,49 +625,10 @@ function updateHomeMateAI(dt) {
     return;
   }
 
-  // Comportamento especial Toque e Passa
-  if (twoOnePlay && twoOnePlay.target === homeMate && twoOnePlay.phase === 'receiveWait') {
-    if (!isBallReceivedBy(homeMate)) return;
-    const faceX = player1.x - homeMate.x;
-    const faceY = player1.y - homeMate.y;
-    const length = Math.hypot(faceX, faceY) || 1;
-    homeMate.facingX = faceX / length;
-    homeMate.facingY = faceY / length;
-    if (twoOnePlay.waitTimer <= 0) {
-      const targetPoint = projectTwoOneReceiver(CONFIG.physics.kickPower * 0.9 * 0.92);
-      if (homeMate.kickCooldownTimer > 0 || isPassPathBlocked(ball, targetPoint, homeMate)) {
-        finishTwoOne(false, 'O retorno foi bloqueado; jogada encerrada');
-        return;
-      }
-      if (homeMate.tryKick(ball, 0, 0, true, targetPoint)) {
-        ball.vx *= 0.92;
-        ball.vy *= 0.92;
-        ball.dribbleLockTimer = 0.16;
-        ball.dribbleLockOwner = homeMate;
-        twoOnePlay.phase = 'return';
-        twoOnePlay.timer = 2.1;
-        twoOnePlay.returnAssistTimer = 1.8;
-        twoOnePlay.returnTurnBudget = 0.68;
-      } else {
-        finishTwoOne(false, 'O companheiro não conseguiu devolver a bola');
-      }
-    }
+  // Comportamento especial Toque e Passa (rework em js/skills/twoOne.js)
+  if (typeof updateTwoOneTeammateBehavior === 'function' && updateTwoOneTeammateBehavior(dt)) {
     return;
   }
-
-  if (twoOnePlay && twoOnePlay.target === homeMate && twoOnePlay.phase === 'outbound') {
-    if (isBallReceivedBy(homeMate)) {
-      twoOnePlay.phase = 'receiveWait';
-      twoOnePlay.waitTimer = 0.8;
-      twoOnePlay.timer = 2.6;
-      twoOnePlay.receiveLostTimer = 0;
-      return;
-    }
-    driveBotTo(homeMate, ball.x + ball.vx * 3, ball.y + ball.vy * 3, 1.12);
-    return;
-  }
-
-  if (twoOnePlay && twoOnePlay.target === homeMate && twoOnePlay.phase === 'return') return;
 
   // Modo 2v2: usa o mesmo motor tático escalável respeitando o usuário humano (player1)
   if (gameMode === '2v2') {
