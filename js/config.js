@@ -14,8 +14,8 @@ const ITEMS = {
   ],
   powers: [
     { id: 'cannon', name: 'Chute de Pistola', price: 1000, description: 'Arma o próximo chute com força explosiva e animação de disparo.' },
-    { id: 'sprint', name: 'Arrancada Relâmpago', price: 800, description: 'Explosão de velocidade por 4 segundos.' },
-    { id: 'phantom', name: 'Drible Fantasma', price: 1200, description: 'Com a bola dominada, corta para o lado e escapa de botes.' },
+    { id: 'sprint', name: 'A Pantera do Chigiri', price: 800, description: 'Explosão feral em velocidade máxima inspirada em Hyoma Chigiri, com rastro de garras e faíscas carmesim.' },
+    { id: 'phantom', name: 'Drible da Abelha', price: 1200, description: 'Drible acrobático de Meguru Bachira: dá um chapéu aéreo por cima do adversário com asas douradas e favos de mel.' },
     { id: 'vision', name: 'Visão de Campo', price: 1000, description: 'Por 20s, revela padrões táticos, aumenta a velocidade e libera um passe longo, curvo e teleguiado para um aliado.' },
     { id: 'curve', name: 'Curva Impossível', price: 1200, description: 'Mostra a prévia em arco e dispara um chute com efeito Magnus letal rumo ao gol.' },
     { id: 'twoOne', name: 'Toque e Passa', price: 1500, description: 'Tabela rápida com devolução de primeira e arrancada.' },
@@ -25,6 +25,58 @@ const ITEMS = {
     { id: 'sniper', name: 'Instinto de Artilheiro', price: 1500, description: 'Chute potente e certeiro ao finalizar na zona ofensiva.' },
     { id: 'shadow', name: 'Sombra do Marcador', price: 1200, description: 'Marcação cerrada automática acompanhando o adversário com a bola por 4 segundos.' },
     { id: 'ego', name: 'Despertar do Ego', price: 2000, description: 'Aumenta bastante a velocidade e potência de chute por 5 segundos.' }
+  ],
+  cards: [
+    {
+      id: 'card_gold',
+      name: 'Card Ouro Clássico',
+      price: 0,
+      theme: 'gold',
+      badge: 'FUT',
+      rarity: 'Ouro Lendário',
+      description: 'Card dourado tradicional estilo FIFA Ultimate Team com acabamento metálico reluzente.',
+      colors: ['#fef08a', '#d97706', '#78350f']
+    },
+    {
+      id: 'card_dino',
+      name: 'Card Dinossauro',
+      price: 1500,
+      theme: 'dino',
+      badge: '🦖',
+      rarity: 'Pré-Histórico',
+      description: 'Arte pré-histórica jurássica com tema fóssil de T-Rex, escamas verdes e bordas de âmbar.',
+      colors: ['#86efac', '#15803d', '#14532d']
+    },
+    {
+      id: 'card_waifu',
+      name: 'Card Anime Waifu',
+      price: 1800,
+      theme: 'waifu',
+      badge: '✨',
+      rarity: 'Kawaii Edition',
+      description: 'Visual fofo com temática de garotinhas de anime, bordas pastel, corações e rosa brilhante.',
+      colors: ['#fbcfe8', '#f43f5e', '#be185d']
+    },
+    {
+      id: 'card_isagi',
+      name: 'Card Yoichi Isagi',
+      price: 2000,
+      theme: 'isagi',
+      badge: '🧩',
+      rarity: 'Blue Lock Ace',
+      description: 'Tema cibernético com peças de quebra-cabeça holográficas, grade tática e verde fluorescente.',
+      colors: ['#4ade80', '#059669', '#064e3b']
+    },
+    {
+      id: 'card_chigiri',
+      name: 'Card Hyoma Chigiri',
+      price: 2000,
+      theme: 'chigiri',
+      badge: '🐾',
+      rarity: 'Pantera Vermelha',
+      description: 'Tema da Pantera Vermelha em rosa-choque e rubi incandescente com faíscas cortantes de velocidade.',
+      colors: ['#fda4af', '#e11d48', '#881337']
+    }
   ]
 };
 

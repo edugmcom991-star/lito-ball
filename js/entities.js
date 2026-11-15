@@ -117,7 +117,7 @@ class Player {
         this.powerEffect === 'sprint' ? 1.32 :
         this.powerEffect === 'ego' ? 1.28 :
         this.powerEffect === 'shadow' ? 1.14 :
-        this.powerEffect === 'vision' ? 1.08 : 1
+        this.powerEffect === 'vision' ? 1.20 : 1
       );
 
     if (currentSpeed > maxSpeed) {
@@ -471,6 +471,11 @@ class Ball {
     this.visionPassTrail = [];
     this.pistolTrailTimer = 0;
     this.pistolShotTrail = [];
+    this.elevation = 0;
+    this.sombreroTimer = 0;
+    this.sombreroDuration = 0.72;
+    this.sombreroDribbledDefender = null;
+    this.beeAuraTimer = 0;
   }
 
   reset(x, y) {
@@ -495,9 +500,30 @@ class Ball {
     this.visionPassTrail = [];
     this.pistolTrailTimer = 0;
     this.pistolShotTrail = [];
+    this.elevation = 0;
+    this.sombreroTimer = 0;
+    this.sombreroDribbledDefender = null;
+    this.beeAuraTimer = 0;
   }
 
   update() {
+    if (this.sombreroTimer > 0) {
+      this.sombreroTimer = Math.max(0, this.sombreroTimer - 1 / 60);
+      const t = 1 - (this.sombreroTimer / this.sombreroDuration);
+      this.elevation = Math.sin(t * Math.PI) * 42;
+      if (this.sombreroTimer === 0) {
+        this.elevation = 0;
+        this.sombreroDribbledDefender = null;
+        if (typeof addImpactSpark === 'function') {
+          addImpactSpark(this.x, this.y, '#facc15', 9, 0.8);
+        }
+      }
+    } else {
+      this.elevation = 0;
+    }
+    if (this.beeAuraTimer > 0) {
+      this.beeAuraTimer = Math.max(0, this.beeAuraTimer - 1 / 60);
+    }
     if (this.dribbleLockTimer > 0) {
       this.dribbleLockTimer = Math.max(0, this.dribbleLockTimer - 1 / 60);
       if (this.dribbleLockTimer === 0) this.dribbleLockOwner = null;
@@ -731,11 +757,30 @@ class Ball {
 
     renderCtx.save();
 
+    const elev = this.elevation || 0;
+    const renderY = this.y - elev;
+    const scaleFactor = 1 + (elev / 42) * 0.35;
+    const currentRadius = this.radius * scaleFactor;
+
+    // Sombra no chão desacoplada com fading e redução de tamanho
+    const shadowY = this.y + 3;
+    const shadowAlpha = Math.max(0.12, 0.35 - (elev / 42) * 0.22);
+    const shadowRadius = Math.max(4.5, this.radius * (1 - (elev / 42) * 0.32));
+    renderCtx.beginPath();
+    renderCtx.arc(this.x + 2, shadowY, shadowRadius, 0, Math.PI * 2);
+    renderCtx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+    renderCtx.fill();
+
+    // Efeito visual do "Drible da Abelha": favos de mel holográficos e asas douradas
+    if (elev > 0 || this.beeAuraTimer > 0) {
+      drawBeeHoneycombAura(renderCtx, this.x, renderY, elev);
+    }
+
     for (let i = 0; i < this.trail.length; i++) {
       const pt = this.trail[i];
       const progress = (i + 1) / this.trail.length;
       renderCtx.beginPath();
-      renderCtx.arc(pt.x, pt.y, this.radius * (0.3 + 0.6 * progress), 0, Math.PI * 2);
+      renderCtx.arc(pt.x, pt.y - (elev * (progress * 0.4)), this.radius * (0.3 + 0.6 * progress), 0, Math.PI * 2);
       renderCtx.fillStyle = this.sniperShotTimer > 0
         ? `rgba(251, 113, 133, ${0.38 * progress})`
         : this.powerShotTimer > 0
@@ -745,22 +790,17 @@ class Ball {
     }
 
     renderCtx.beginPath();
-    renderCtx.arc(this.x + 2, this.y + 3, this.radius, 0, Math.PI * 2);
-    renderCtx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    renderCtx.fill();
-
-    renderCtx.beginPath();
-    renderCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    renderCtx.arc(this.x, renderY, currentRadius, 0, Math.PI * 2);
     renderCtx.fillStyle = '#f8fafc';
     renderCtx.fill();
 
     const grad = renderCtx.createRadialGradient(
-      this.x - this.radius * 0.35,
-      this.y - this.radius * 0.35,
+      this.x - currentRadius * 0.35,
+      renderY - currentRadius * 0.35,
       1,
       this.x,
-      this.y,
-      this.radius
+      renderY,
+      currentRadius
     );
     grad.addColorStop(0, '#ffffff');
     grad.addColorStop(0.6, '#e2e8f0');
@@ -774,7 +814,7 @@ class Ball {
 
     renderCtx.fillStyle = '#1e293b';
     renderCtx.beginPath();
-    renderCtx.arc(this.x, this.y, this.radius * 0.32, 0, Math.PI * 2);
+    renderCtx.arc(this.x, renderY, currentRadius * 0.32, 0, Math.PI * 2);
     renderCtx.fill();
 
     renderCtx.restore();
@@ -823,17 +863,97 @@ class GoalPost {
 // Partículas e trilhas visuais
 const particles = [];
 const lightningTrails = [];
+const pantherPaws = [];
+const pantherSparks = [];
 const phantomShadows = [];
+
+/* ==========================================================================
+   EFEITO DO DRIBLE DA ABELHA (MEGURU BACHIRA)
+   Favos de mel hexagonais dourados e asas vibrantes
+   ========================================================================== */
+function drawBeeHoneycombAura(renderCtx, x, y, elevation) {
+  renderCtx.save();
+  const now = performance.now();
+  const pulse = 0.55 + Math.sin(now / 70) * 0.25;
+  const hexSize = 14 + (elevation / 42) * 5;
+
+  // 1. Asas de abelha translúcidas vibrando rapidamente
+  const wingAngle = Math.sin(now / 22) * 0.45;
+  renderCtx.save();
+  renderCtx.translate(x, y);
+  renderCtx.globalAlpha = 0.65 * pulse;
+  renderCtx.fillStyle = 'rgba(254, 240, 138, 0.55)';
+  renderCtx.strokeStyle = '#facc15';
+  renderCtx.lineWidth = 1.2;
+
+  // Asa esquerda
+  renderCtx.save();
+  renderCtx.rotate(-0.55 + wingAngle);
+  renderCtx.beginPath();
+  renderCtx.ellipse(-14, -12, 16, 7, -0.3, 0, Math.PI * 2);
+  renderCtx.fill();
+  renderCtx.stroke();
+  renderCtx.restore();
+
+  // Asa direita
+  renderCtx.save();
+  renderCtx.rotate(0.55 - wingAngle);
+  renderCtx.beginPath();
+  renderCtx.ellipse(14, -12, 16, 7, 0.3, 0, Math.PI * 2);
+  renderCtx.fill();
+  renderCtx.stroke();
+  renderCtx.restore();
+
+  renderCtx.restore();
+
+  // 2. Favos de mel hexagonais em volta da bola
+  const hexOffsets = [
+    { dx: 0, dy: 0 },
+    { dx: -hexSize * 1.5, dy: -hexSize * 0.86 },
+    { dx: hexSize * 1.5, dy: -hexSize * 0.86 },
+    { dx: -hexSize * 1.5, dy: hexSize * 0.86 },
+    { dx: hexSize * 1.5, dy: hexSize * 0.86 },
+    { dx: 0, dy: -hexSize * 1.73 },
+    { dx: 0, dy: hexSize * 1.73 }
+  ];
+
+  renderCtx.save();
+  renderCtx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+  renderCtx.lineWidth = 1.6;
+  renderCtx.shadowColor = '#eab308';
+  renderCtx.shadowBlur = 8;
+  renderCtx.fillStyle = 'rgba(254, 240, 138, 0.12)';
+
+  for (let i = 0; i < hexOffsets.length; i++) {
+    const off = hexOffsets[i];
+    const hx = x + off.dx * 0.85;
+    const hy = y + off.dy * 0.85;
+    renderCtx.beginPath();
+    for (let s = 0; s < 6; s++) {
+      const angle = (Math.PI / 3) * s + (now / 1800);
+      const px = hx + Math.cos(angle) * (hexSize * 0.72);
+      const py = hy + Math.sin(angle) * (hexSize * 0.72);
+      if (s === 0) renderCtx.moveTo(px, py);
+      else renderCtx.lineTo(px, py);
+    }
+    renderCtx.closePath();
+    renderCtx.stroke();
+    renderCtx.fill();
+  }
+  renderCtx.restore();
+
+  renderCtx.restore();
+}
 
 function addPhantomShadow(player) {
   phantomShadows.push({
     x: player.x,
     y: player.y,
     radius: player.radius,
-    color: player.color,
+    color: '#eab308',
     number: player.number,
-    life: 0.28,
-    maxLife: 0.28
+    life: 0.32,
+    maxLife: 0.32
   });
 }
 
@@ -846,17 +966,17 @@ function updateAndDrawPhantomShadows(renderCtx) {
       continue;
     }
     renderCtx.save();
-    renderCtx.globalAlpha = (shadow.life / shadow.maxLife) * 0.4;
+    renderCtx.globalAlpha = (shadow.life / shadow.maxLife) * 0.45;
     renderCtx.beginPath();
-    renderCtx.arc(shadow.x, shadow.y, shadow.radius + 2, 0, Math.PI * 2);
-    renderCtx.fillStyle = shadow.color;
-    renderCtx.shadowColor = '#b8f2ff';
-    renderCtx.shadowBlur = 14;
+    renderCtx.arc(shadow.x, shadow.y, shadow.radius + 3, 0, Math.PI * 2);
+    renderCtx.fillStyle = '#fde047';
+    renderCtx.shadowColor = '#eab308';
+    renderCtx.shadowBlur = 15;
     renderCtx.fill();
     renderCtx.lineWidth = 2;
-    renderCtx.strokeStyle = '#d9f8ff';
+    renderCtx.strokeStyle = '#fef08a';
     renderCtx.stroke();
-    renderCtx.fillStyle = '#fff';
+    renderCtx.fillStyle = '#78350f';
     renderCtx.font = `bold ${Math.floor(shadow.radius * 0.8)}px Arial`;
     renderCtx.textAlign = 'center';
     renderCtx.textBaseline = 'middle';
@@ -865,24 +985,104 @@ function updateAndDrawPhantomShadows(renderCtx) {
   }
 }
 
+/* ==========================================================================
+   A PANTERA DO CHIGIRI — RASTRO FERAL, GARRAS E SILHUETA
+   ========================================================================== */
 function addLightningTrail(player) {
   const backX = -player.facingX;
   const backY = -player.facingY;
   const sideX = -backY;
   const sideY = backX;
+
+  // Adiciona feixe incandescente rubi/rosa-choque
   const points = [];
-  for (let i = 0; i < 6; i++) {
-    const along = i * 9;
-    const zigzag = i === 0 || i === 5 ? 0 : (Math.random() - 0.5) * 15;
+  for (let i = 0; i < 7; i++) {
+    const along = i * 11;
+    const zigzag = i === 0 || i === 6 ? 0 : (Math.random() - 0.5) * 16;
     points.push({
       x: player.x + backX * (player.radius + along) + sideX * zigzag,
       y: player.y + backY * (player.radius + along) + sideY * zigzag
     });
   }
-  lightningTrails.push({ points, life: 0.2, maxLife: 0.2 });
+  lightningTrails.push({ points, life: 0.28, maxLife: 0.28 });
+
+  // Adiciona marca de garras no gramado
+  if (Math.random() < 0.65) {
+    pantherPaws.push({
+      x: player.x + backX * (player.radius + 12) + (Math.random() - 0.5) * 16,
+      y: player.y + backY * (player.radius + 12) + (Math.random() - 0.5) * 16,
+      angle: Math.atan2(player.facingY, player.facingX),
+      life: 0.45,
+      maxLife: 0.45
+    });
+  }
+
+  // Faíscas elétricas carmesim e fumaça
+  for (let k = 0; k < 3; k++) {
+    pantherSparks.push({
+      x: player.x + backX * player.radius + (Math.random() - 0.5) * 14,
+      y: player.y + backY * player.radius + (Math.random() - 0.5) * 14,
+      vx: (Math.random() - 0.5) * 3 - player.facingX * 2,
+      vy: (Math.random() - 0.5) * 3 - player.facingY * 2,
+      life: 0.35 + Math.random() * 0.2,
+      maxLife: 0.5,
+      color: Math.random() < 0.6 ? '#f43f5e' : Math.random() < 0.5 ? '#fda4af' : '#e11d48',
+      size: 1.8 + Math.random() * 2.5
+    });
+  }
 }
 
 function updateAndDrawLightningTrails(renderCtx) {
+  // 1. Marcas de garras da Pantera no chão
+  for (let i = pantherPaws.length - 1; i >= 0; i--) {
+    const paw = pantherPaws[i];
+    paw.life -= 1 / 60;
+    if (paw.life <= 0) {
+      pantherPaws.splice(i, 1);
+      continue;
+    }
+    const alpha = paw.life / paw.maxLife;
+    renderCtx.save();
+    renderCtx.translate(paw.x, paw.y);
+    renderCtx.rotate(paw.angle);
+    renderCtx.globalAlpha = alpha * 0.85;
+    renderCtx.strokeStyle = '#fda4af';
+    renderCtx.shadowColor = '#e11d48';
+    renderCtx.shadowBlur = 10;
+    renderCtx.lineWidth = 2.2;
+    // 3 marcas de garras rasgando o chão
+    for (let c = -1; c <= 1; c++) {
+      renderCtx.beginPath();
+      renderCtx.moveTo(-8, c * 5);
+      renderCtx.quadraticCurveTo(2, c * 6, 12, c * 4.5);
+      renderCtx.stroke();
+    }
+    renderCtx.restore();
+  }
+
+  // 2. Faíscas elétricas e fumaça rubi
+  for (let i = pantherSparks.length - 1; i >= 0; i--) {
+    const spark = pantherSparks[i];
+    spark.x += spark.vx;
+    spark.y += spark.vy;
+    spark.life -= 1 / 60;
+    if (spark.life <= 0) {
+      pantherSparks.splice(i, 1);
+      continue;
+    }
+    const alpha = spark.life / spark.maxLife;
+    renderCtx.save();
+    renderCtx.globalAlpha = alpha;
+    renderCtx.beginPath();
+    renderCtx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
+    renderCtx.fillStyle = spark.color;
+    renderCtx.shadowColor = '#f43f5e';
+    renderCtx.shadowBlur = 8;
+    renderCtx.fill();
+    renderCtx.restore();
+  }
+
+  // 3. Feixes de velocidade e silhueta veloz da Pantera
   for (let i = lightningTrails.length - 1; i >= 0; i--) {
     const trail = lightningTrails[i];
     trail.life -= 1 / 60;
@@ -895,20 +1095,46 @@ function updateAndDrawLightningTrails(renderCtx) {
     renderCtx.globalAlpha = alpha;
     renderCtx.lineCap = 'round';
     renderCtx.lineJoin = 'round';
+
+    // Rastro rubi exterior
     renderCtx.beginPath();
     renderCtx.moveTo(trail.points[0].x, trail.points[0].y);
     for (let p = 1; p < trail.points.length; p++) {
       renderCtx.lineTo(trail.points[p].x, trail.points[p].y);
     }
-    renderCtx.strokeStyle = '#38bdf8';
-    renderCtx.lineWidth = 6;
-    renderCtx.shadowColor = '#38bdf8';
+    renderCtx.strokeStyle = '#f43f5e';
+    renderCtx.lineWidth = 7;
+    renderCtx.shadowColor = '#e11d48';
     renderCtx.shadowBlur = 18;
     renderCtx.stroke();
-    renderCtx.strokeStyle = '#e0f2fe';
-    renderCtx.lineWidth = 2.2;
-    renderCtx.shadowBlur = 7;
+
+    // Núcleo rosa-choque incandescente
+    renderCtx.strokeStyle = '#fecdd3';
+    renderCtx.lineWidth = 2.4;
+    renderCtx.shadowBlur = 6;
     renderCtx.stroke();
+
+    // Silhueta felina aerodinâmica da Pantera
+    const head = trail.points[0];
+    const tail = trail.points[trail.points.length - 1];
+    const panAngle = Math.atan2(head.y - tail.y, head.x - tail.x);
+    renderCtx.save();
+    renderCtx.translate((head.x + tail.x) * 0.5, (head.y + tail.y) * 0.5);
+    renderCtx.rotate(panAngle);
+    renderCtx.fillStyle = 'rgba(225, 29, 72, 0.45)';
+    renderCtx.strokeStyle = 'rgba(253, 164, 175, 0.75)';
+    renderCtx.lineWidth = 1.6;
+    renderCtx.beginPath();
+    // Corpo esguio em corrida
+    renderCtx.moveTo(18, 0);
+    renderCtx.quadraticCurveTo(8, -8, -12, -4);
+    renderCtx.lineTo(-20, -1);
+    renderCtx.quadraticCurveTo(-10, 8, 8, 4);
+    renderCtx.closePath();
+    renderCtx.fill();
+    renderCtx.stroke();
+    renderCtx.restore();
+
     renderCtx.restore();
   }
 }

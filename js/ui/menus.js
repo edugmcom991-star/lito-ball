@@ -15,11 +15,15 @@ let remapTimeoutHandler = null;
 const PAGE_META = {
   shop: {
     title: 'Loja Oficial Lito Coins',
-    subtitle: 'Desbloqueie camisas exclusivas e poderes especiais para dominar a arena'
+    subtitle: 'Desbloqueie camisas, habilidades e cartinhas colecionáveis para dominar a arena'
   },
   inventory: {
     title: 'Seu Inventário',
-    subtitle: 'Gerencie e equipe seus itens adquiridos antes ou durante a partida'
+    subtitle: 'Gerencie e equipe camisas, habilidades e cartinhas adquiridas'
+  },
+  career: {
+    title: 'Modo Carreira & Cartinha Oficial',
+    subtitle: 'Sua trajetória no Litoball eternizada na sua cartinha colecionável'
   },
   missions: {
     title: 'Central de Missões',
@@ -264,12 +268,14 @@ function showFeaturePage(page) {
   menuPage.classList.toggle('menu-page--shop', page === 'shop');
   menuPage.classList.toggle('menu-page--credits', page === 'credits');
   menuPage.classList.toggle('menu-page--missions', page === 'missions');
+  menuPage.classList.toggle('menu-page--career', page === 'career');
 
   const categoryTabs = (page === 'shop' || page === 'inventory')
     ? `
       <div class="menu-categories" role="tablist">
         <button type="button" data-cat="shirts" class="cat-tab-btn ${activeCategory === 'shirts' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'shirts'}">${getSvgIcon('icon-shirt', 16)}<span>Camisas</span></button>
-        <button type="button" data-cat="powers" class="cat-tab-btn ${activeCategory === 'powers' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'powers'}">${getSvgIcon('icon-bolt', 16)}<span>Poderes &amp; Habilidades</span></button>
+        <button type="button" data-cat="powers" class="cat-tab-btn ${activeCategory === 'powers' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'powers'}">${getSvgIcon('icon-bolt', 16)}<span>Habilidades</span></button>
+        <button type="button" data-cat="cards" class="cat-tab-btn ${activeCategory === 'cards' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'cards'}">${getSvgIcon('icon-card', 16)}<span>Cartinhas FUT</span></button>
       </div>
     `
     : '';
@@ -301,6 +307,7 @@ function showFeaturePage(page) {
   `;
 
   if (page === 'shop' || page === 'inventory') renderItems();
+  if (page === 'career') renderCareer();
   if (page === 'missions') renderMissions();
   if (page === 'options') renderOptions();
   if (page === 'credits') renderCredits();
@@ -327,8 +334,12 @@ function renderItems() {
   const container = document.getElementById('menu-page-content');
   if (!container) return;
 
-  const allItems = ITEMS[activeCategory];
-  const owned = activeCategory === 'shirts' ? profile.ownedShirts : profile.ownedPowers;
+  const allItems = ITEMS[activeCategory] || [];
+  const owned = activeCategory === 'shirts'
+    ? profile.ownedShirts
+    : activeCategory === 'cards'
+      ? (profile.ownedCards || ['card_gold'])
+      : profile.ownedPowers;
   const items = activePage === 'inventory'
     ? allItems.filter(item => owned.includes(item.id))
     : allItems;
@@ -337,6 +348,8 @@ function renderItems() {
   if (activePage === 'inventory') {
     const equippedShirt = ITEMS.shirts.find(s => s.id === profile.equippedShirt);
     const equippedPower = ITEMS.powers.find(p => p.id === profile.equippedPower);
+    const equippedCard = (ITEMS.cards || []).find(c => c.id === (profile.equippedCard || 'card_gold')) || (ITEMS.cards ? ITEMS.cards[0] : null);
+
     summaryHtml = `
       <div class="equipped-summary-bar">
         <div class="equipped-summary-chip">
@@ -354,6 +367,14 @@ function renderItems() {
             <strong>${equippedPower ? equippedPower.name : 'Nenhuma'}</strong>
           </div>
           ${equippedPower ? '<button type="button" class="hud-btn" id="unequip-power-btn" style="margin-inline-start:auto;">Remover</button>' : ''}
+        </div>
+        <div class="equipped-summary-chip">
+          <span class="nav-icon" aria-hidden="true">${getSvgIcon('icon-card', 22)}</span>
+          <div>
+            <small>Cartinha Oficial</small>
+            <strong>${equippedCard ? equippedCard.name : 'Ouro Clássico'}</strong>
+          </div>
+          <button type="button" class="hud-btn" id="view-career-btn" style="margin-inline-start:auto;">Ver Carreira</button>
         </div>
       </div>
     `;
@@ -377,22 +398,30 @@ function renderItems() {
     const has = owned.includes(item.id);
     const equipped = activeCategory === 'shirts'
       ? profile.equippedShirt === item.id
-      : profile.equippedPower === item.id;
+      : activeCategory === 'cards'
+        ? (profile.equippedCard || 'card_gold') === item.id
+        : profile.equippedPower === item.id;
 
     const coinMini = getSvgIcon('icon-litocoin', 14, 'svg-coin-icon');
     const iconHtml = activeCategory === 'shirts'
       ? `<span class="item-icon shirt-icon" style="background:linear-gradient(90deg,${item.colors.join(',')})">${item.badge}</span>`
-      : `<span class="item-icon item-icon-power">${renderPowerIconMedia(item.id, 22, item.name)}</span>`;
+      : activeCategory === 'cards'
+        ? `<span class="item-icon item-icon-card card-badge-${item.theme}" style="background:linear-gradient(135deg,${item.colors.join(',')})">${item.badge}</span>`
+        : `<span class="item-icon item-icon-power">${renderPowerIconMedia(item.id, 22, item.name)}</span>`;
 
     const statusBadge = equipped
       ? '<span class="item-status-pill equipped">&#10003; Equipado</span>'
       : has
         ? '<span class="item-status-pill owned">Adquirido</span>'
-        : `<span class="item-status-pill price">${coinMini} ${item.price.toLocaleString('pt-BR')}</span>`;
+        : item.price === 0
+          ? '<span class="item-status-pill owned">Gratuito</span>'
+          : `<span class="item-status-pill price">${coinMini} ${item.price.toLocaleString('pt-BR')}</span>`;
 
     const cooldownMeta = activeCategory === 'powers'
       ? `<span class="item-meta">Recarga base: ${POWER_COOLDOWNS[item.id] || 12}s</span>`
-      : `<span class="item-meta">Uniforme oficial de clube</span>`;
+      : activeCategory === 'cards'
+        ? `<span class="item-meta">Raridade: ${item.rarity || 'Colecionável'}</span>`
+        : `<span class="item-meta">Uniforme oficial de clube</span>`;
 
     const level = item.id === 'phantom' ? phantomLevelFor(player1) : 0;
     const upgradeCost = item.id === 'phantom' ? PHANTOM_UPGRADE_COSTS[level + 1] : null;
@@ -400,18 +429,15 @@ function renderItems() {
     const levelInfo = phantomInfo
       ? `<small class="upgrade-level">Nível ${level}/3 · corte ${phantomInfo.duration.toFixed(2)}s · esquiva ${Math.round(phantomInfo.dodgeChance * 100)}% · recarga ${phantomInfo.cooldown}s</small>`
       : '';
-    const upgradeControl = has && item.id === 'phantom'
-      ? (upgradeCost
-        ? `${levelInfo}<button type="button" class="secondary-btn upgrade-btn" data-upgrade="phantom">Melhorar Nv.${level + 1} · ${coinMini} ${upgradeCost.toLocaleString('pt-BR')}</button>`
-        : `${levelInfo}<small class="upgrade-level">&#10003; Nível máximo atingido</small>`)
-      : '';
 
     const actionLabel = has
       ? (equipped ? 'Equipado' : 'Equipar')
-      : `<span class="btn-inline-label"><span>Comprar</span> ${coinMini} <span>${item.price.toLocaleString('pt-BR')}</span></span>`;
+      : item.price === 0
+        ? 'Resgatar'
+        : `<span class="btn-inline-label"><span>Comprar</span> ${coinMini} <span>${item.price.toLocaleString('pt-BR')}</span></span>`;
 
     return `
-      <article class="menu-item ${equipped ? 'is-equipped' : ''}">
+      <article class="menu-item ${equipped ? 'is-equipped' : ''} ${activeCategory === 'cards' ? 'menu-item--card card-theme-' + item.theme : ''}">
         <div class="item-card-top">
           ${iconHtml}
           ${statusBadge}
@@ -433,17 +459,25 @@ function renderItems() {
   container.innerHTML = `${summaryHtml}<div class="menu-items">${cardsHtml}</div>`;
   bindUnequipButtons();
 
+  const careerBtn = document.getElementById('view-career-btn');
+  if (careerBtn) careerBtn.addEventListener('click', () => showFeaturePage('career'));
+
   container.querySelectorAll('[data-item]').forEach(btn => {
     btn.addEventListener('click', () => {
       const item = items.find(x => x.id === btn.dataset.item);
       if (!item) return;
-      const arr = activeCategory === 'shirts' ? profile.ownedShirts : profile.ownedPowers;
+      const arr = activeCategory === 'shirts'
+        ? profile.ownedShirts
+        : activeCategory === 'cards'
+          ? (profile.ownedCards = profile.ownedCards || ['card_gold'])
+          : profile.ownedPowers;
+
       if (!arr.includes(item.id)) {
-        if (ECONOMY.getCoins() < item.price) {
+        if (item.price > 0 && ECONOMY.getCoins() < item.price) {
           showPowerFeedback('Saldo insuficiente de Lito Coins', true);
           return;
         }
-        ECONOMY.spendCoins(item.price);
+        if (item.price > 0) ECONOMY.spendCoins(item.price);
         arr.push(item.id);
         if (typeof MISSIONS !== 'undefined') MISSIONS.syncUnlockCount();
         showPowerFeedback(`${item.name} adquirido!`);
@@ -455,6 +489,8 @@ function renderItems() {
       }
       if (activeCategory === 'shirts') {
         profile.equippedShirt = item.id;
+      } else if (activeCategory === 'cards') {
+        profile.equippedCard = item.id;
       } else {
         profile.equippedPower = item.id;
       }
@@ -477,10 +513,223 @@ function renderItems() {
       ECONOMY.spendCoins(cost);
       profile.powerLevels.phantom = level + 1;
       persistProfile();
-      showPowerFeedback(`Drible Fantasma melhorado para nível ${level + 1}!`);
+      showPowerFeedback(`Drible da Abelha melhorado para nível ${level + 1}!`);
       renderItems();
     });
   });
+}
+
+/* ==========================================================================
+   TELA DA CARREIRA OFICIAL E CARTINHA EQUIPADA
+   ========================================================================== */
+function renderCareer() {
+  const container = document.getElementById('menu-page-content');
+  if (!container) return;
+
+  const stats = (typeof CAREER !== 'undefined') ? CAREER.get() : { goals: 0, matches: 0, assists: 0, tackles: 0, saves: 0 };
+  const allCards = ITEMS.cards || [];
+  const equippedCardId = profile.equippedCard || 'card_gold';
+  const cardData = allCards.find(c => c.id === equippedCardId) || allCards[0];
+  const ownedCards = profile.ownedCards || ['card_gold'];
+
+  // Overall calculado harmonicamente com as 5 estatísticas
+  const points = (stats.goals * 1.5) + (stats.saves * 2.0) + (stats.tackles * 1.2) + (stats.assists * 1.4) + (stats.matches * 0.5);
+  const ratingOverall = Math.min(99, Math.max(76, Math.floor(76 + Math.min(23, points))));
+
+  container.innerHTML = `
+    <div class="career-layout">
+      <div class="career-card-showcase">
+        <div class="career-fut-card card-theme-${cardData.theme}" id="career-card-display">
+          <div class="career-card-inner">
+            <div class="career-card-top">
+              <div class="career-card-rating-block">
+                <span class="career-card-rating">${ratingOverall}</span>
+                <span class="career-card-pos">ATA</span>
+              </div>
+              <div class="career-card-badge-wrap">
+                <span class="career-card-badge-icon">${cardData.badge}</span>
+                <small class="career-card-badge-label">${cardData.rarity}</small>
+              </div>
+            </div>
+
+            <div class="career-card-avatar-wrap">
+              <canvas id="career-avatar-canvas" width="110" height="110"></canvas>
+              <div class="career-card-avatar-shine" aria-hidden="true"></div>
+            </div>
+
+            <div class="career-card-name-band">
+              <span class="career-card-name">${(playerConfig.name || 'LITO').toUpperCase()}</span>
+            </div>
+
+            <div class="career-card-divider" aria-hidden="true"></div>
+
+            <div class="career-card-stats-grid">
+              <div class="career-stat-cell">
+                <span class="career-stat-num">${stats.goals}</span>
+                <span class="career-stat-tag">GOL</span>
+              </div>
+              <div class="career-stat-cell">
+                <span class="career-stat-num">${stats.matches}</span>
+                <span class="career-stat-tag">PJ</span>
+              </div>
+              <div class="career-stat-cell">
+                <span class="career-stat-num">${stats.assists}</span>
+                <span class="career-stat-tag">AST</span>
+              </div>
+              <div class="career-stat-cell">
+                <span class="career-stat-num">${stats.tackles}</span>
+                <span class="career-stat-tag">DES</span>
+              </div>
+              <div class="career-stat-cell">
+                <span class="career-stat-num">${stats.saves}</span>
+                <span class="career-stat-tag">SAV</span>
+              </div>
+            </div>
+
+            <div class="career-card-seal-band">
+              <span class="career-card-seal">${cardData.name.toUpperCase()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="career-details-panel">
+        <div class="career-metrics-card">
+          <h3 class="heading-with-icon">${getSvgIcon('icon-career', 22)}<span>Estatísticas Vitais da Carreira</span></h3>
+          <p class="career-desc">Seus feitos são registrados em tempo real no estádio e persistem na sua cartinha oficial.</p>
+          <div class="career-stat-cards-grid">
+            <div class="career-metric-tile">
+              <span class="tile-icon">⚽</span>
+              <div class="tile-info">
+                <small>Gols Totais</small>
+                <strong>${stats.goals}</strong>
+              </div>
+            </div>
+            <div class="career-metric-tile">
+              <span class="tile-icon">🏟️</span>
+              <div class="tile-info">
+                <small>Partidas Jogadas</small>
+                <strong>${stats.matches}</strong>
+              </div>
+            </div>
+            <div class="career-metric-tile">
+              <span class="tile-icon">🎯</span>
+              <div class="tile-info">
+                <small>Assistências</small>
+                <strong>${stats.assists}</strong>
+              </div>
+            </div>
+            <div class="career-metric-tile">
+              <span class="tile-icon">🛡️</span>
+              <div class="tile-info">
+                <small>Desarmes Certos</small>
+                <strong>${stats.tackles}</strong>
+              </div>
+            </div>
+            <div class="career-metric-tile highlight-save">
+              <span class="tile-icon">🧤</span>
+              <div class="tile-info">
+                <small>Defesas Milagrosas (Saves)</small>
+                <strong>${stats.saves}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="career-deck-selector">
+          <div class="deck-selector-header">
+            <h4>Cartinhas Colecionáveis</h4>
+            <button type="button" class="hud-btn" id="career-shop-link">${getSvgIcon('icon-shop', 14)}<span>Abrir Loja de Cards</span></button>
+          </div>
+          <div class="career-deck-grid">
+            ${allCards.map(c => {
+              const isOwned = ownedCards.includes(c.id);
+              const isEquipped = c.id === equippedCardId;
+              return `
+                <div class="career-deck-item card-theme-${c.theme} ${isEquipped ? 'is-equipped' : ''} ${!isOwned ? 'is-locked' : ''}">
+                  <div class="deck-item-top">
+                    <span class="deck-badge">${c.badge}</span>
+                    <small class="deck-rarity">${c.rarity}</small>
+                  </div>
+                  <strong class="deck-name">${c.name}</strong>
+                  <div class="deck-actions">
+                    ${isEquipped
+                      ? '<span class="deck-pill active">&#10003; Ativa</span>'
+                      : isOwned
+                        ? `<button type="button" class="secondary-btn cyber-btn deck-btn" data-equip-card="${c.id}">Equipar</button>`
+                        : `<button type="button" class="primary-btn cyber-btn deck-btn" data-buy-card="${c.id}">Loja (${c.price} LC)</button>`}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Desenha o avatar no canvas do card de carreira
+  const canvas = document.getElementById('career-avatar-canvas');
+  if (canvas) {
+    const actx = canvas.getContext('2d');
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const r = Math.min(cx, cy) - 6;
+    actx.clearRect(0, 0, canvas.width, canvas.height);
+    actx.save();
+    actx.shadowColor = 'rgba(0,0,0,0.65)';
+    actx.shadowBlur = 14;
+    actx.beginPath();
+    actx.arc(cx, cy, r, 0, Math.PI * 2);
+    actx.fillStyle = playerConfig.color;
+    actx.fill();
+    actx.restore();
+
+    actx.beginPath();
+    actx.arc(cx, cy, r, 0, Math.PI * 2);
+    actx.strokeStyle = 'rgba(0,0,0,0.72)';
+    actx.lineWidth = 3.6;
+    actx.stroke();
+
+    actx.beginPath();
+    actx.arc(cx, cy, r * 0.72, 0, Math.PI * 2);
+    actx.strokeStyle = 'rgba(255,255,255,0.32)';
+    actx.lineWidth = 2;
+    actx.stroke();
+
+    actx.fillStyle = '#ffffff';
+    actx.font = `bold ${Math.floor(r * 0.78)}px "Segoe UI", Arial, sans-serif`;
+    actx.textAlign = 'center';
+    actx.textBaseline = 'middle';
+    actx.shadowColor = 'rgba(0,0,0,0.6)';
+    actx.shadowBlur = 4;
+    actx.fillText(playerConfig.number || '10', cx, cy);
+  }
+
+  // Eventos de clique para trocar de card
+  container.querySelectorAll('[data-equip-card]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      profile.equippedCard = btn.dataset.equipCard;
+      persistProfile();
+      showPowerFeedback('Cartinha equipada com sucesso!', true, false);
+      renderCareer();
+    });
+  });
+
+  container.querySelectorAll('[data-buy-card]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeCategory = 'cards';
+      showFeaturePage('shop');
+    });
+  });
+
+  const shopLink = document.getElementById('career-shop-link');
+  if (shopLink) {
+    shopLink.addEventListener('click', () => {
+      activeCategory = 'cards';
+      showFeaturePage('shop');
+    });
+  }
 }
 
 function bindUnequipButtons() {

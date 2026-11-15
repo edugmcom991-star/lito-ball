@@ -100,6 +100,15 @@
       <path d="M8.5 4 4 6.5l2 4 2.5-1V20h7V9.5l2.5 1 2-4L15.5 4a3.8 3.8 0 0 1-7 0Z" fill="currentColor" fill-opacity="0.15" />
     </symbol>
 
+    <symbol id="icon-career" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l3 6.5 7 .8-5.2 4.8 1.5 7-6.3-3.6-6.3 3.6 1.5-7L2 9.3l7-.8L12 2Z" fill="currentColor" fill-opacity="0.22" />
+    </symbol>
+
+    <symbol id="icon-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="3" width="14" height="18" rx="2.5" fill="currentColor" fill-opacity="0.18" />
+      <path d="M5 8h14M8 12h4M8 15h6" />
+    </symbol>
+
     <symbol id="icon-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 3a9 9 0 1 0 0 18 2.2 2.2 0 0 0 2-3.1c-.4-.8.2-1.9 1.1-1.9H17a4 4 0 0 0 4-4c0-4.9-4-9-9-9Z" fill="currentColor" fill-opacity="0.14" />
       <circle cx="8" cy="10" r="1.1" fill="currentColor" />
@@ -217,6 +226,72 @@
 
     <!-- Anúncio de Gol -->
     <div id="goal-banner" aria-live="polite">GOOOOL!</div>
+
+    <!-- FUT CARD: Comemoração de Gol estilo FIFA Ultimate Team -->
+    <div id="fut-card" class="fut-card" aria-hidden="true" role="presentation">
+      <div class="futc-inner">
+        <!-- Topo: rating + posição -->
+        <div class="futc-top">
+          <div class="futc-rating-block">
+            <span class="futc-rating">7.5</span>
+            <span class="futc-pos">ATA</span>
+          </div>
+          <div class="futc-shield" aria-hidden="true">
+            <svg viewBox="0 0 32 36" width="28" height="32" fill="none">
+              <path d="M16 2 L30 7 L30 20 Q30 30 16 34 Q2 30 2 20 L2 7 Z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
+              <text x="16" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="white" font-family="Arial">LB</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Avatar do botão em canvas -->
+        <div class="futc-avatar-wrap">
+          <canvas class="futc-avatar-canvas" width="90" height="90"></canvas>
+          <div class="futc-avatar-shine" aria-hidden="true"></div>
+        </div>
+
+        <!-- Nome do jogador -->
+        <div class="futc-name-band">
+          <span class="futc-name">LITO</span>
+        </div>
+
+        <!-- Separador dourado -->
+        <div class="futc-divider" aria-hidden="true"></div>
+
+        <!-- Grid 2×3 de estatísticas -->
+        <div class="futc-stats-grid">
+          <div class="futc-stat">
+            <span class="futc-stat-val" data-stat="gol">0</span>
+            <span class="futc-stat-label">GOL</span>
+          </div>
+          <div class="futc-stat">
+            <span class="futc-stat-val" data-stat="ast">0</span>
+            <span class="futc-stat-label">AST</span>
+          </div>
+          <div class="futc-stat">
+            <span class="futc-stat-val" data-stat="fin">0</span>
+            <span class="futc-stat-label">FIN</span>
+          </div>
+          <div class="futc-stat">
+            <span class="futc-stat-val" data-stat="des">0</span>
+            <span class="futc-stat-label">DES</span>
+          </div>
+          <div class="futc-stat">
+            <span class="futc-stat-val" data-stat="pas">0</span>
+            <span class="futc-stat-label">PAS</span>
+          </div>
+          <div class="futc-stat">
+            <span class="futc-stat-val" data-stat="nota">6.0</span>
+            <span class="futc-stat-label">NOTA</span>
+          </div>
+        </div>
+
+        <!-- Rodapé: selo temático -->
+        <div class="futc-seal-band">
+          <span class="futc-seal">HOMEM DO JOGO</span>
+        </div>
+      </div>
+    </div>
 
     <!-- Contagem Regressiva de Início da Partida -->
     <div id="countdown-overlay" class="countdown-overlay hidden" role="status" aria-live="assertive">
@@ -528,6 +603,12 @@
               <svg class="svg-icon" width="24" height="24"><use href="#icon-inventory"></use></svg>
             </span>
             <span class="nav-label">Inventário</span>
+          </button>
+          <button type="button" class="nav-tile-btn cyber-btn" data-view="career">
+            <span class="nav-icon-frame" aria-hidden="true">
+              <svg class="svg-icon" width="24" height="24"><use href="#icon-career"></use></svg>
+            </span>
+            <span class="nav-label">Carreira</span>
           </button>
           <button type="button" class="nav-tile-btn cyber-btn nav-tile-missions" data-view="missions">
             <span id="missions-ready-badge" class="nav-badge-count" hidden>0</span>

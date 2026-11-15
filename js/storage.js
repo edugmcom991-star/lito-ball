@@ -50,6 +50,8 @@ const ECONOMY = {
     const fallback = {
       ownedShirts: ['classic'],
       ownedPowers: [],
+      ownedCards: ['card_gold'],
+      equippedCard: 'card_gold',
       powerLevels: {},
       equippedShirt: 'classic',
       equippedPower: null,
@@ -104,12 +106,49 @@ const ECONOMY = {
   }
 };
 
+/* ==========================================================================
+   ESTATÍSTICAS DA CARREIRA ACUMULADAS (localStorage)
+   ========================================================================== */
+const CAREER = {
+  LS_KEY: 'litoBall_career',
+
+  get() {
+    const fallback = { goals: 0, matches: 0, assists: 0, tackles: 0, saves: 0 };
+    try {
+      const raw = localStorage.getItem(this.LS_KEY);
+      if (!raw) return fallback;
+      return { ...fallback, ...JSON.parse(raw) };
+    } catch (e) {
+      return fallback;
+    }
+  },
+
+  save(stats) {
+    localStorage.setItem(this.LS_KEY, JSON.stringify(stats));
+  },
+
+  increment(field, amount = 1) {
+    const s = this.get();
+    s[field] = (s[field] || 0) + amount;
+    this.save(s);
+    return s;
+  },
+
+  recordGoal() { return this.increment('goals', 1); },
+  recordMatch() { return this.increment('matches', 1); },
+  recordAssist() { return this.increment('assists', 1); },
+  recordTackle() { return this.increment('tackles', 1); },
+  recordSave() { return this.increment('saves', 1); }
+};
+
 // Inicializa a economia ao carregar
 ECONOMY.load();
 
 let profile = ECONOMY.profile();
 profile.ownedShirts = profile.ownedShirts || ['classic'];
 profile.ownedPowers = profile.ownedPowers || [];
+profile.ownedCards  = profile.ownedCards  || ['card_gold'];
+profile.equippedCard = profile.equippedCard || 'card_gold';
 profile.powerLevels = profile.powerLevels || {};
 
 let playerConfig = {

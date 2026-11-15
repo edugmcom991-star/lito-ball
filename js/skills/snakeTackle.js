@@ -254,6 +254,10 @@ function resolveSnakeDisarm(tackle) {
     targetCarrier.tackleStaggerTimer = 0.72;
     targetCarrier.vx = -dirX * 1.9 + (targetCarrier.x > actor.x ? 0.9 : -0.9);
     targetCarrier.vy = -dirY * 1.9 + (Math.random() - 0.5) * 0.6;
+    if (actor === player1) {
+      if (typeof CAREER !== 'undefined') CAREER.recordTackle();
+      if (typeof MatchRating !== 'undefined') MatchRating.recordTackle(player1);
+    }
   }
 
   if (gameMode === 'training') {

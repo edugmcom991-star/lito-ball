@@ -124,21 +124,23 @@ const Sound = {
   },
 
   playLightning() {
-    this.playAsset('lightning', this.playLightningSynth);
+    this.playPantherRush();
   },
 
-  playLightningSynth() {
-    this.playNoiseBurst(0.42, 'bandpass', 5200, 220, 0.34);
-    this.playNoiseBurst(0.72, 'lowpass', 900, 65, 0.24, 0.12);
+  playPantherRush() {
+    // Corte de vento cortante
+    this.playNoiseBurst(0.35, 'bandpass', 5800, 340, 0.42);
+    // Rugido abafado e ressonante de arranque felino
+    this.playNoiseBurst(0.55, 'lowpass', 650, 48, 0.38, 0.05);
     if (!this.ctx) return;
     try {
-      const now = this.ctx.currentTime + 0.08;
+      const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(125, now);
-      osc.frequency.exponentialRampToValueAtTime(42, now + 0.42);
-      gain.gain.setValueAtTime(0.18, now);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(210, now);
+      osc.frequency.exponentialRampToValueAtTime(58, now + 0.45);
+      gain.gain.setValueAtTime(0.26, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
       osc.connect(gain);
       gain.connect(this.masterGain || this.ctx.destination);
@@ -147,12 +149,42 @@ const Sound = {
     } catch (e) {}
   },
 
-  playCannon() {
-    this.playAsset('cannon', this.playCannonSynth);
+  playBeeDribble() {
+    // Zumbido acrobático e estalido leve de elevação (Sombrero Flick)
+    this.playNoiseBurst(0.22, 'bandpass', 3800, 1100, 0.28);
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Sweep ascendente do chapéu
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(840, now + 0.28);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      osc.connect(gain);
+      gain.connect(this.masterGain || this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.35);
+
+      // Zumbido rápido de asa de abelha
+      const buzz = this.ctx.createOscillator();
+      const buzzGain = this.ctx.createGain();
+      buzz.type = 'sawtooth';
+      buzz.frequency.setValueAtTime(240, now);
+      buzz.frequency.setValueAtTime(260, now + 0.1);
+      buzzGain.gain.setValueAtTime(0.12, now);
+      buzzGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      buzz.connect(buzzGain);
+      buzzGain.connect(this.masterGain || this.ctx.destination);
+      buzz.start(now);
+      buzz.stop(now + 0.32);
+    } catch (e) {}
   },
 
   playPhantom() {
-    this.playAsset('phantom', this.playLightningSynth);
+    this.playBeeDribble();
   },
 
   playCannonSynth() {

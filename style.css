@@ -2517,3 +2517,730 @@ canvas#gameCanvas {
     transform-origin: bottom center;
   }
 }
+
+/* ==========================================================================
+   FUT CARD — COMEMORAÇÃO DE GOL (estilo FIFA Ultimate Team dourado)
+   ========================================================================== */
+
+:root {
+  --futc-team-color: #2b70f6;
+  --futc-shine: #fef3c7;
+}
+
+/* Wrapper posicionado sobre o canvas, centralizado */
+.fut-card {
+  position: absolute;
+  /* Posiciona no terço central da tela de jogo */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6) rotateY(90deg);
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  /* Oculto por padrão */
+  visibility: hidden;
+  transition: none;
+  will-change: transform, opacity;
+}
+
+/* Estado: aparecendo */
+.fut-card.futc-show {
+  visibility: visible;
+  animation: futcEnter 0.52s cubic-bezier(0.22, 0.9, 0.36, 1.1) forwards;
+}
+
+/* Estado: saindo */
+.fut-card.futc-hide {
+  visibility: visible;
+  animation: futcExit 0.38s ease-in forwards;
+}
+
+@keyframes futcEnter {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.55) rotateY(80deg); }
+  60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06) rotateY(-5deg); }
+  80%  { transform: translate(-50%, -50%) scale(0.97) rotateY(2deg); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotateY(0deg); }
+}
+
+@keyframes futcExit {
+  0%   { opacity: 1; transform: translate(-50%, -50%) scale(1) rotateY(0deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.72) rotateY(-60deg); }
+}
+
+/* Cartinha principal */
+.futc-inner {
+  width: 148px;
+  background: linear-gradient(165deg,
+    #fef9c3 0%,
+    #fde68a 18%,
+    #d97706 42%,
+    #92400e 60%,
+    #78350f 78%,
+    #451a03 100%
+  );
+  border-radius: 10px 10px 4px 4px;
+  /* Clip path: ponta chanfrada no canto inferior direito */
+  clip-path: polygon(0 0, 100% 0, 100% 90%, 86% 100%, 0 100%);
+  border: 2.5px solid #fef9c3;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.5),
+    0 8px 32px rgba(0,0,0,0.7),
+    0 0 24px 2px rgba(251,191,36,0.42),
+    inset 0 0 12px rgba(254,249,195,0.14);
+  padding: 10px 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Brilho animado deslizante */
+.futc-inner::before {
+  content: '';
+  position: absolute;
+  top: -60%;
+  left: -40%;
+  width: 60%;
+  height: 200%;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.28) 50%, transparent 70%);
+  animation: futcShine 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes futcShine {
+  0%   { left: -40%; }
+  60%  { left: 120%; }
+  100% { left: 120%; }
+}
+
+/* Topo: rating + posição + escudo */
+.futc-top {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.futc-rating-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.futc-rating {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  line-height: 1;
+}
+
+.futc-pos {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.88);
+  letter-spacing: 1px;
+  margin-top: 1px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.futc-shield {
+  opacity: 0.85;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+}
+
+/* Avatar */
+.futc-avatar-wrap {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  margin: 0 auto;
+}
+
+.futc-avatar-canvas {
+  display: block;
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+}
+
+.futc-avatar-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.32) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+/* Nome */
+.futc-name-band {
+  width: 100%;
+  text-align: center;
+  margin: 0;
+}
+
+.futc-name {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.65);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 128px;
+}
+
+/* Divisor dourado */
+.futc-divider {
+  width: 80%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
+  margin: 0;
+}
+
+/* Grid de estatísticas 3×2 */
+.futc-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px 6px;
+  width: 100%;
+  padding: 0 2px;
+}
+
+.futc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.futc-stat-val {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  line-height: 1.1;
+}
+
+.futc-stat-label {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.72);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* Rodapé com selo */
+.futc-seal-band {
+  width: 100%;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.futc-seal {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  color: #fef3c7;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.9;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* ==========================================================================
+   SISTEMA DE CARDS EQUIPÁVEIS & MODO CARREIRA (5 TEMAS EXCLUSIVOS)
+   ========================================================================== */
+
+/* Layout da Tela de Carreira */
+.career-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .career-layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+.career-card-showcase {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  perspective: 900px;
+}
+
+/* Cartinha Oficial no Modo Carreira */
+.career-fut-card {
+  width: 220px;
+  border-radius: 14px 14px 6px 6px;
+  clip-path: polygon(0 0, 100% 0, 100% 91%, 84% 100%, 0 100%);
+  position: relative;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.75),
+    0 0 28px rgba(0, 0, 0, 0.5);
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+  user-select: none;
+}
+
+.career-fut-card:hover {
+  transform: translateY(-4px) rotateX(4deg);
+}
+
+.career-card-inner {
+  width: 100%;
+  padding: 14px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px 12px 4px 4px;
+}
+
+/* Efeito de brilho holográfico deslizante */
+.career-card-inner::before {
+  content: '';
+  position: absolute;
+  top: -70%;
+  left: -50%;
+  width: 70%;
+  height: 220%;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.32) 50%, transparent 75%);
+  animation: futcShine 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Topo: rating + posição + insígnia */
+.career-card-top {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.career-card-rating-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.career-card-rating {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 38px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  line-height: 1;
+}
+
+.career-card-pos {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 1.2px;
+  margin-top: 2px;
+}
+
+.career-card-badge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.career-card-badge-icon {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  line-height: 1;
+}
+
+.career-card-badge-label {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* Avatar do jogador */
+.career-card-avatar-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  margin: 2px auto;
+}
+
+#career-avatar-canvas {
+  display: block;
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
+}
+
+.career-card-avatar-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* Nome */
+.career-card-name-band {
+  width: 100%;
+  text-align: center;
+}
+
+.career-card-name {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 2.2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.career-card-divider {
+  width: 85%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+}
+
+/* Grid de Estatísticas Vitais (5 atributos oficiais) */
+.career-card-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  width: 100%;
+  padding: 2px 0;
+}
+
+.career-stat-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.career-stat-num {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
+  line-height: 1.1;
+}
+
+.career-stat-tag {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* Selo temático no rodapé */
+.career-card-seal-band {
+  width: 100%;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.career-card-seal {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 9px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  opacity: 0.95;
+}
+
+/* ==========================================================================
+   OS 5 TEMAS VISUAIS DE CARTAS
+   ========================================================================== */
+
+/* 1. TEMA OURO CLÁSSICO (Estilo FUT Metálico) */
+.card-theme-gold {
+  border: 2.8px solid #fef08a;
+  box-shadow: 0 0 24px rgba(234, 179, 8, 0.45);
+}
+.card-theme-gold .career-card-inner,
+.card-theme-gold .futc-inner,
+.card-theme-gold.menu-item--card {
+  background: linear-gradient(165deg,
+    #fef9c3 0%,
+    #fde68a 18%,
+    #d97706 44%,
+    #92400e 65%,
+    #78350f 84%,
+    #451a03 100%
+  );
+}
+
+/* 2. TEMA DINOSSAURO (Pré-Histórico / Escamas Verdes e Âmbar) */
+.card-theme-dino {
+  border: 2.8px solid #86efac;
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.45);
+}
+.card-theme-dino .career-card-inner,
+.card-theme-dino .futc-inner,
+.card-theme-dino.menu-item--card {
+  background:
+    radial-gradient(circle at 80% 20%, rgba(245, 158, 11, 0.3) 0%, transparent 50%),
+    linear-gradient(165deg,
+      #bbf7d0 0%,
+      #4ade80 20%,
+      #16a34a 45%,
+      #166534 68%,
+      #14532d 86%,
+      #052e16 100%
+    );
+}
+
+/* 3. TEMA ANIME WAIFU (Kawaii / Rosa Pastel e Brilhante) */
+.card-theme-waifu {
+  border: 2.8px solid #fbcfe8;
+  box-shadow: 0 0 24px rgba(244, 63, 94, 0.45);
+}
+.card-theme-waifu .career-card-inner,
+.card-theme-waifu .futc-inner,
+.card-theme-waifu.menu-item--card {
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.45) 0%, transparent 40%),
+    linear-gradient(165deg,
+      #fdf2f8 0%,
+      #fce7f3 22%,
+      #f472b6 48%,
+      #db2777 72%,
+      #9d174d 88%,
+      #700733 100%
+    );
+}
+
+/* 4. TEMA YOICHI ISAGI (Cibernético / Quebra-Cabeça / Verde Fluorescente) */
+.card-theme-isagi {
+  border: 2.8px solid #4ade80;
+  box-shadow: 0 0 26px rgba(74, 222, 128, 0.5);
+}
+.card-theme-isagi .career-card-inner,
+.card-theme-isagi .futc-inner,
+.card-theme-isagi.menu-item--card {
+  background:
+    radial-gradient(circle at 75% 30%, rgba(56, 189, 248, 0.32) 0%, transparent 50%),
+    linear-gradient(165deg,
+      #dcfce7 0%,
+      #86efac 16%,
+      #10b981 42%,
+      #047857 66%,
+      #064e3b 84%,
+      #022c22 100%
+    );
+}
+
+/* 5. TEMA HYOMA CHIGIRI (Pantera Vermelha / Rosa-Choque e Faíscas Rubi) */
+.card-theme-chigiri {
+  border: 2.8px solid #fda4af;
+  box-shadow: 0 0 26px rgba(244, 63, 94, 0.55);
+}
+.card-theme-chigiri .career-card-inner,
+.card-theme-chigiri .futc-inner,
+.card-theme-chigiri.menu-item--card {
+  background:
+    radial-gradient(circle at 25% 20%, rgba(251, 113, 133, 0.4) 0%, transparent 50%),
+    linear-gradient(165deg,
+      #ffe4e6 0%,
+      #fb7185 20%,
+      #e11d48 46%,
+      #9f1239 70%,
+      #881337 86%,
+      #4c0519 100%
+    );
+}
+
+/* Painel de Detalhes da Carreira */
+.career-details-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.career-metrics-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.career-desc {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-top: 4px;
+  margin-bottom: 14px;
+}
+
+.career-stat-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.career-metric-tile {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.career-metric-tile.highlight-save {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.tile-icon {
+  font-size: 22px;
+}
+
+.tile-info small {
+  display: block;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.tile-info strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+/* Seletor de Deck / Coleção de Cards */
+.career-deck-selector {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.deck-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.deck-selector-header h4 {
+  font-size: 15px;
+  font-weight: 800;
+  color: #e2e8f0;
+}
+
+.career-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.career-deck-item {
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 105px;
+  transition: transform 0.2s ease;
+}
+
+.career-deck-item:hover {
+  transform: translateY(-2px);
+}
+
+.career-deck-item.is-equipped {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.deck-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.deck-badge {
+  font-size: 20px;
+}
+
+.deck-rarity {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.deck-name {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.deck-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.deck-pill.active {
+  background: #22c55e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.deck-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+/* Cards na Loja e Inventário */
+.item-icon-card {
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}

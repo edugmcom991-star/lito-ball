@@ -108,6 +108,118 @@ let trainingDummyHasBall = false;
 let twoVtwoStats = null;
 let endGameTimerId = null;
 
+/* ==========================================================================
+   SISTEMA DE NOTAS DA PARTIDA (MATCH RATING)
+   Rastreia estatísticas individuais e calcula nota dinâmica por jogador.
+   ========================================================================== */
+const MatchRating = {
+  BASE: 6.0,
+  MIN: 4.0,
+  MAX: 10.0,
+
+  /* Tabela de notas para gols (cumulativa) */
+  GOAL_RATINGS:  [0, 7.5, 8.5, 10.0],  // 1º gol → 7.5, 2º → 8.5, 3º+ → 10.0
+  ASSIST_RATINGS: [0, 7.0, 8.0, 9.0],   // 1ª assist → 7.0, 2ª → 8.0, 3ª+ → 9.0
+
+  /* Inicializa as estatísticas dos jogadores no início de cada partida */
+  reset() {
+    const makeStats = () => ({
+      rating: this.BASE,
+      goals: 0,
+      assists: 0,
+      shots: 0,
+      tackles: 0,
+      passes: 0
+    });
+    this.p1 = makeStats();
+    this.p2 = makeStats();
+    this.mate = makeStats();
+    this.awayMate = makeStats();
+  },
+
+  /** Retorna o objeto de stats de um actor */
+  statsFor(actor) {
+    if (actor === player1)   return this.p1;
+    if (actor === player2)   return this.p2;
+    if (actor === homeMate)  return this.mate;
+    if (actor === awayMate)  return this.awayMate;
+    return null;
+  },
+
+  /** Registra um gol marcado */
+  recordGoal(actor) {
+    const s = this.statsFor(actor);
+    if (!s) return;
+    s.goals++;
+    const idx = Math.min(s.goals, this.GOAL_RATINGS.length - 1);
+    s.rating = Math.max(s.rating, this.GOAL_RATINGS[idx]);
+    // Hat-trick: sempre 10.0
+    if (s.goals >= 3) s.rating = 10.0;
+  },
+
+  /** Registra uma assistência */
+  recordAssist(actor) {
+    const s = this.statsFor(actor);
+    if (!s) return;
+    s.assists++;
+    const idx = Math.min(s.assists, this.ASSIST_RATINGS.length - 1);
+    s.rating = Math.max(s.rating, this.ASSIST_RATINGS[idx]);
+  },
+
+  /** Registra finalização */
+  recordShot(actor) {
+    const s = this.statsFor(actor);
+    if (s) s.shots++;
+  },
+
+  /** Perda de bola sob pressão: -0.2 (mín 4.0) */
+  recordTurnover(actor) {
+    const s = this.statsFor(actor);
+    if (!s) return;
+    s.rating = Math.max(this.MIN, parseFloat((s.rating - 0.2).toFixed(1)));
+  },
+
+  /** Desarme bem-sucedido: +0.3 */
+  recordTackle(actor) {
+    const s = this.statsFor(actor);
+    if (!s) return;
+    s.tackles++;
+    s.rating = Math.min(this.MAX, parseFloat((s.rating + 0.3).toFixed(1)));
+  },
+
+  /** Passe certo registrado */
+  recordPass(actor) {
+    const s = this.statsFor(actor);
+    if (s) s.passes++;
+  },
+
+  /** Formata nota com 1 casa decimal */
+  formatted(actor) {
+    const s = this.statsFor(actor);
+    return s ? s.rating.toFixed(1) : '6.0';
+  }
+};
+
+// Inicializa o sistema de notas
+MatchRating.reset();
+
+/* Posição tática do jogador (para o FUT Card) */
+function playerPosition(actor) {
+  if (actor === player1 || actor === homeMate) {
+    if (gameMode === '2v2') return actor === player1 ? 'ATA' : 'MEI';
+    return 'ATA';
+  }
+  return gameMode === '2v2' ? (actor === player2 ? 'ATA' : 'ZAG') : 'BOT';
+}
+
+/* Nome do jogador para o card */
+function playerDisplayName(actor) {
+  if (actor === player1) return (playerConfig?.name || 'LITO').toUpperCase().slice(0, 10);
+  if (actor === homeMate) return 'PARCEIRO';
+  if (actor === awayMate) return 'RIVAL';
+  return 'BOT';
+}
+
 function newTwoVtwoStats() {
   return {
     passStreak: 0,
@@ -251,6 +363,109 @@ btnPass.addEventListener('click', () => {
    DETECÇÃO DE GOLS E FIM DE PARTIDA
    ========================================================================== */
 
+/* ==========================================================================
+   FUT CARD — COMEMORAÇÃO DE GOL
+   Exibe uma cartinha estilo FIFA Ultimate Team sobre o campo durante a comemoração.
+   ========================================================================== */
+let futCardHideTimer = null;
+
+function showFutCard(actor, scoringTeam) {
+  const el = document.getElementById('fut-card');
+  if (!el) return;
+
+  const stats = MatchRating.statsFor(actor);
+  const rating = stats ? stats.rating.toFixed(1) : '6.0';
+  const isPlayerTeam = (scoringTeam === 'p1');
+  const name = playerDisplayName(actor);
+  const pos  = playerPosition(actor);
+  const color = actor.color || (isPlayerTeam ? '#2b70f6' : '#e53935');
+
+  // Preenche conteúdo
+  el.querySelector('.futc-rating').textContent = rating;
+  el.querySelector('.futc-pos').textContent = pos;
+  el.querySelector('.futc-name').textContent = name;
+  el.querySelector('.futc-seal').textContent = stats && stats.goals >= 3 ? 'HAT-TRICK' :
+    stats && stats.goals >= 2 ? 'BICAMPEÃO' : isPlayerTeam ? 'HOMEM DO JOGO' : 'ARTILHEIRO';
+
+  // Estatísticas do bloco inferior
+  el.querySelector('[data-stat="gol"]').textContent  = stats ? stats.goals : 0;
+  el.querySelector('[data-stat="ast"]').textContent  = stats ? stats.assists : 0;
+  el.querySelector('[data-stat="fin"]').textContent  = stats ? stats.shots : 0;
+  el.querySelector('[data-stat="des"]').textContent  = stats ? stats.tackles : 0;
+  el.querySelector('[data-stat="pas"]').textContent  = stats ? stats.passes : 0;
+  el.querySelector('[data-stat="nota"]').textContent = rating;
+
+  // Mini-avatar do botão desenhado em canvas
+  const avatarCanvas = el.querySelector('.futc-avatar-canvas');
+  if (avatarCanvas) {
+    const actx = avatarCanvas.getContext('2d');
+    const cx = avatarCanvas.width / 2;
+    const cy = avatarCanvas.height / 2;
+    const r = Math.min(cx, cy) - 6;
+    actx.clearRect(0, 0, avatarCanvas.width, avatarCanvas.height);
+    // Sombra exterior
+    actx.save();
+    actx.shadowColor = 'rgba(0,0,0,0.5)';
+    actx.shadowBlur = 12;
+    actx.beginPath();
+    actx.arc(cx, cy, r, 0, Math.PI * 2);
+    actx.fillStyle = color;
+    actx.fill();
+    actx.restore();
+    // Borda escura
+    actx.beginPath();
+    actx.arc(cx, cy, r, 0, Math.PI * 2);
+    actx.strokeStyle = 'rgba(0,0,0,0.65)';
+    actx.lineWidth = 3.5;
+    actx.stroke();
+    // Anel interno
+    actx.beginPath();
+    actx.arc(cx, cy, r * 0.72, 0, Math.PI * 2);
+    actx.strokeStyle = 'rgba(255,255,255,0.28)';
+    actx.lineWidth = 2;
+    actx.stroke();
+    // Número
+    actx.fillStyle = '#ffffff';
+    actx.font = `bold ${r * 0.78}px "Segoe UI", Arial, sans-serif`;
+    actx.textAlign = 'center';
+    actx.textBaseline = 'middle';
+    actx.shadowColor = 'rgba(0,0,0,0.6)';
+    actx.shadowBlur = 4;
+    actx.fillText(actor.number || '10', cx, cy);
+  }
+
+  // Cor de borda baseada no time
+  el.style.setProperty('--futc-team-color', color);
+  el.style.setProperty('--futc-shine', isPlayerTeam ? '#fef3c7' : '#fee2e2');
+
+  // Aplica tema visual da cartinha (se o jogador tiver equipado uma carta colecionável)
+  el.classList.remove('card-theme-gold', 'card-theme-dino', 'card-theme-waifu', 'card-theme-isagi', 'card-theme-chigiri');
+  if (isPlayerTeam && actor === player1 && profile && profile.equippedCard) {
+    const cardDef = (CONFIG.ITEMS && CONFIG.ITEMS.cards) ? CONFIG.ITEMS.cards.find(c => c.id === profile.equippedCard) : null;
+    const theme = (cardDef && cardDef.theme) ? cardDef.theme : 'gold';
+    el.classList.add(`card-theme-${theme}`);
+  } else {
+    el.classList.add('card-theme-gold');
+  }
+
+  // Exibe com animação
+  el.classList.remove('futc-hide', 'futc-show');
+  void el.offsetWidth; // reflow para reiniciar animação
+  el.classList.add('futc-show');
+
+  if (futCardHideTimer) clearTimeout(futCardHideTimer);
+  // Esconde um pouco antes do goalPauseTimer acabar
+  futCardHideTimer = setTimeout(() => hideFutCard(), 2200);
+}
+
+function hideFutCard() {
+  const el = document.getElementById('fut-card');
+  if (!el) return;
+  el.classList.remove('futc-show');
+  el.classList.add('futc-hide');
+  if (futCardHideTimer) { clearTimeout(futCardHideTimer); futCardHideTimer = null; }
+}
+
 function checkGoal() {
   if (gameMode === 'training') {
     clearGoalBanner();
@@ -276,8 +491,12 @@ function handleGoal(scoringTeam) {
   }
 
   gameState.pausedForGoal = true;
-  gameState.goalPauseTimer = 2.0;
+  gameState.goalPauseTimer = 2.5; // ligeiramente maior para o FUT Card ser visto
   gameState.pendingGoalCountdown = true;
+
+  // Determinar o autor do gol e da assistência para o MatchRating
+  let goalScorer = null;
+  let assistProvider = null;
 
   if (scoringTeam === 'p1') {
     gameState.scoreP1++;
@@ -285,11 +504,36 @@ function handleGoal(scoringTeam) {
     goalBanner.style.color = '#38bdf8';
     goalBanner.textContent = 'GOOOOL!';
     if (typeof MISSIONS !== 'undefined') MISSIONS.recordGoal(gameMode);
+
+    // O autor é quem chutou por último no time 1
+    goalScorer = isBallControlledBy(player1) ? player1 :
+                 (gameMode === '2v2' && isBallControlledBy(homeMate)) ? homeMate : player1;
+    // Assistência: vem do passe da visão se player1 recebeu de homeMate
+    if (ball.passSource && ball.passSource !== goalScorer && (ball.passSource === player1 || ball.passSource === homeMate)) {
+      assistProvider = ball.passSource;
+    }
   } else {
     gameState.scoreP2++;
     scoreP2El.textContent = gameState.scoreP2;
     goalBanner.style.color = '#f87171';
     goalBanner.textContent = gameMode === '2v2' ? 'GOL ADVERSÁRIO!' : 'GOL DO BOT!';
+
+    goalScorer = isBallControlledBy(player2) ? player2 :
+                 (gameMode === '2v2' && isBallControlledBy(awayMate)) ? awayMate : player2;
+  }
+
+  // Atualiza notas e carreira
+  if (goalScorer) {
+    MatchRating.recordGoal(goalScorer);
+    if (goalScorer === player1 && typeof CAREER !== 'undefined') {
+      CAREER.recordGoal();
+    }
+  }
+  if (assistProvider) {
+    MatchRating.recordAssist(assistProvider);
+    if (assistProvider === player1 && typeof CAREER !== 'undefined') {
+      CAREER.recordAssist();
+    }
   }
 
   if (gameMode === '2v2' && scoringTeam === 'p1' && twoVtwoStats?.goalAssistPending) {
@@ -305,6 +549,9 @@ function handleGoal(scoringTeam) {
   for (let i = 0; i < 35; i++) {
     addImpactSpark(ball.x, ball.y);
   }
+
+  // Exibe o FUT Card comemorativo
+  if (goalScorer) showFutCard(goalScorer, scoringTeam);
 
   if (endGameTimerId) clearTimeout(endGameTimerId);
   if (gameMode === '2v2' && gameState.isOvertime) {
@@ -342,6 +589,7 @@ function endGame(reason) {
   updateCountdownOverlay();
   Sound.playWhistle();
   ECONOMY.recordMatch();
+  if (typeof CAREER !== 'undefined') CAREER.recordMatch();
 
   finalScoreP1El.textContent = gameState.scoreP1;
   finalScoreP2El.textContent = gameState.scoreP2;
@@ -734,6 +982,8 @@ function startFreshMatch(mode = 'match') {
   gameState.pendingGoalCountdown = false;
   triggerCountdown(3.0);
   twoVtwoStats = gameMode === '2v2' ? newTwoVtwoStats() : null;
+  MatchRating.reset();
+  hideFutCard();
 
   player1.powerCooldown = 0;
   player1.powerEffect = null;
@@ -1347,6 +1597,45 @@ function redrawIdlePitchScene() {
    LOOP PRINCIPAL COM FIXED TIMESTEP (60 FPS DETERMINÍSTICO)
    ========================================================================== */
 
+let lastSaveTime = 0;
+let lastTackleTime = 0;
+
+function checkSaveInterception(defender) {
+  if (defender !== player1 && defender !== homeMate) return;
+  const p = CONFIG.pitch;
+  const g = CONFIG.goals;
+  // Na pequena área / boca do gol defendido pelo time do jogador (lado esquerdo)
+  const inGoalMouth = (ball.x <= p.left + p.goalAreaWidth + 40 && ball.x >= p.left - g.depth) &&
+                      (ball.y >= g.topY - 20 && ball.y <= g.bottomY + 20);
+  // Bola em trajetória direta para dentro do gol
+  const movingTowardGoal = ball.vx < -1.1;
+
+  if (inGoalMouth && movingTowardGoal) {
+    const now = performance.now();
+    if (now - lastSaveTime > 1400) {
+      lastSaveTime = now;
+      if (typeof CAREER !== 'undefined') CAREER.recordSave();
+      if (typeof MatchRating !== 'undefined') MatchRating.recordTackle(defender);
+      addImpactSpark(ball.x, ball.y, '#38bdf8', 18, 1.3);
+      showPowerFeedback('DEFESA MILAGROSA! (Save)', true);
+    }
+  }
+}
+
+function checkCleanTackle(tackler) {
+  if (tackler !== player1) return;
+  const opponents = gameMode === '2v2' ? [player2, awayMate] : [player2];
+  const carrier = opponents.find(opp => Math.hypot(opp.x - ball.x, opp.y - ball.y) < opp.radius + ball.radius + 12);
+  if (carrier) {
+    const now = performance.now();
+    if (now - lastTackleTime > 1300) {
+      lastTackleTime = now;
+      if (typeof CAREER !== 'undefined') CAREER.recordTackle();
+      if (typeof MatchRating !== 'undefined') MatchRating.recordTackle(player1);
+    }
+  }
+}
+
 function physicsStep(dt) {
   if (gameState.isGameOver) return;
 
@@ -1554,6 +1843,8 @@ function physicsStep(dt) {
 
   if (player1.ignoreBallCollisionFrames <= 0 && !(typeof shouldSkipNormalBallCollisionForTwoOne === 'function' && shouldSkipNormalBallCollisionForTwoOne(player1))) {
     if (shouldBallContact(player1, [player2, ...(gameMode === '2v2' ? [awayMate] : [])])) {
+      checkSaveInterception(player1);
+      checkCleanTackle(player1);
       resolveCircleCollision(player1, ball, CONFIG.physics.restitutionBall);
     }
   }
@@ -1563,6 +1854,7 @@ function physicsStep(dt) {
     }
   }
   if ((gameMode === 'training' || gameMode === '2v2') && homeMate.ignoreBallCollisionFrames <= 0 && !(typeof shouldSkipNormalBallCollisionForTwoOne === 'function' && shouldSkipNormalBallCollisionForTwoOne(homeMate)) && shouldBallContact(homeMate, [player2, ...(gameMode === '2v2' ? [awayMate] : [])])) {
+    checkSaveInterception(homeMate);
     resolveCircleCollision(homeMate, ball, CONFIG.physics.restitutionBall);
   }
   if (gameMode === '2v2' && awayMate.ignoreBallCollisionFrames <= 0 && shouldBallContact(awayMate, [player1, homeMate])) {
@@ -1626,6 +1918,7 @@ function gameLoop(timestamp) {
   drawVisionPuzzleOverlay(ctx);
   drawTwoVtwoVisionGuidance(ctx);
   drawVisionLongPassPreview(ctx);
+  if (typeof drawBallTrajectoryPrediction === 'function') drawBallTrajectoryPrediction(ctx);
 
   for (let i = 0; i < posts.length; i++) posts[i].draw(ctx);
   updateAndDrawParticles(ctx);

@@ -39,23 +39,34 @@ function choosePhantomCut(actor) {
 
 function phantomEvadesBote(holder, defender) {
   if (holder.powerEffect !== 'phantom' || holder.powerEffectTimer <= 0) return false;
+  // Se estiver executando o Chapeuzinho da Abelha, ignora contato do defensor
+  if (ball.sombreroTimer > 0 && ball.elevation > 8 && defender === ball.sombreroDribbledDefender) {
+    return true;
+  }
   const inRange = Math.hypot(defender.x - ball.x, defender.y - ball.y) <= defender.radius + ball.radius + 8;
   if (inRange && !holder.ghostDodgeUsed) {
     holder.ghostDodgeUsed = true;
     holder.ghostDodgeSuccess = Math.random() < phantomStats(holder).dodgeChance;
     if (holder.ghostDodgeSuccess && holder.isHuman) {
-      showPowerFeedback('O bote passou pela sombra', true);
+      showPowerFeedback('O Monstro driblou o marcador!', true);
     }
   }
   return holder.ghostDodgeSuccess;
 }
 
 function shouldBallContact(collidingPlayer, ghostHolders) {
+  // Ignora colisão se a bola estiver voando no Sombrero Flick por cima do defensor
+  if (ball.sombreroTimer > 0 && ball.elevation > 8 && collidingPlayer === ball.sombreroDribbledDefender) {
+    return false;
+  }
   return !ghostHolders.some(holder => phantomEvadesBote(holder, collidingPlayer));
 }
 
 function updatePhantomBallCarry(actor) {
   if (actor.powerEffect !== 'phantom' || actor.phantomDribbleTimer <= 0 || (ball.dribbleLockTimer > 0 && ball.dribbleLockOwner === actor) || input.kickRequested) return;
+  // Durante o chapéu da abelha, a bola segue trajetória aérea suave
+  if (ball.sombreroTimer > 0) return;
+
   const inputX = actor.isHuman ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0;
   const inputY = actor.isHuman ? (input.down ? 1 : 0) - (input.up ? 1 : 0) : 0;
   if (inputX || inputY) {
@@ -195,6 +206,16 @@ function getVisionPassPath(from, to, control) {
 
 function launchVisionLongPass(actor, target) {
   if (!target || !actor.tryKick(ball, 0, 0, true, target)) return false;
+  // Checa limite de passes teleguiados por ativação
+  if (typeof actor.visionPassesLeft === 'number') {
+    if (actor.visionPassesLeft <= 0) {
+      if (actor.isHuman) showPowerFeedback('Passes teleguiados esgotados nesta ativação!', true);
+      return false;
+    }
+    actor.visionPassesLeft--;
+    if (actor.isHuman && actor.visionPassesLeft === 1) showPowerFeedback('1 passe teleguiado restante', true, false);
+    if (actor.isHuman && actor.visionPassesLeft === 0) showPowerFeedback('Passes teleguiados esgotados!', true, false);
+  }
   const start = { x: ball.x, y: ball.y };
   const end = { x: target.x, y: target.y };
   const control = getVisionPassControlPoint(start, end, actor);
@@ -436,7 +457,7 @@ function applyPower(id, actor) {
     return false;
   }
   if (id === 'phantom' && !isBallControlledBy(actor)) {
-    if (actor.isHuman) showPowerFeedback('Domine a bola para usar o Drible Fantasma', true);
+    if (actor.isHuman) showPowerFeedback('Domine a bola para acionar o Drible da Abelha', true);
     return false;
   }
 
@@ -486,30 +507,86 @@ function applyPower(id, actor) {
     actor.powerEffectTimer = 6;
     addImpactSpark(actor.x, actor.y, '#38bdf8', 10, 1.0);
   } else if (id === 'phantom') {
+    // DRIBLE DA ABELHA (MEGURU BACHIRA) — Sombrero Flick Acrobático
     const stats = phantomStats(actor);
-    const cut = choosePhantomCut(actor);
+    const opponents = (actor.isHuman || actor.isTeammate)
+      ? [player2, ...(gameMode === '2v2' ? [awayMate] : [])]
+      : [player1, ...(gameMode === '2v2' ? [homeMate] : [])];
+    const defender = opponents.slice().sort((a, b) =>
+      Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y)
+    )[0];
+    const distToDefender = defender ? Math.hypot(defender.x - actor.x, defender.y - actor.y) : Infinity;
+
     actor.powerEffect = 'phantom';
     actor.powerEffectTimer = stats.duration;
     actor.phantomDribbleTimer = stats.duration;
-    actor.phantomDirectionX = cut.x;
-    actor.phantomDirectionY = cut.y;
-    actor.ghostCutTimer = 0.22;
     actor.ghostDodgeUsed = false;
-    actor.ghostDodgeSuccess = false;
-    actor.ghostTrailTimer = 0;
-    actor.vx += cut.x * stats.cutForce;
-    actor.vy += cut.y * stats.cutForce;
-    ball.vx += cut.x * stats.cutForce * 0.72;
-    ball.vy += cut.y * stats.cutForce * 0.72;
+    actor.ghostDodgeSuccess = true;
+    ball.beeAuraTimer = 1.35;
+
+    // Se estiver perto do adversário, engatilha o chapéu (Sombrero Flick) por cima dele
+    if (defender && distToDefender < 135) {
+      const ddx = defender.x - actor.x;
+      const ddy = defender.y - actor.y;
+      const dlen = Math.hypot(ddx, ddy) || 1;
+      const dnx = ddx / dlen, dny = ddy / dlen;
+
+      // Ponto de aterrissagem da bola atrás do oponente
+      const p = CONFIG.pitch;
+      const landDistance = defender.radius + ball.radius + 22;
+      const landX = Math.max(p.left + 22, Math.min(p.right - 22, defender.x + dnx * landDistance));
+      const landY = Math.max(p.top + 22, Math.min(p.bottom - 22, defender.y + dny * landDistance));
+
+      // Elevação da bola e desativação temporária da colisão física com o marcador
+      ball.elevation = 0;
+      ball.sombreroTimer = 0.72;
+      ball.sombreroDuration = 0.72;
+      ball.sombreroDribbledDefender = defender;
+      ball.dribbleLockTimer = 0.72;
+      ball.dribbleLockOwner = actor;
+
+      // Impulso parabólico horizontal da bola
+      ball.vx = (landX - ball.x) / (0.72 * 60) * 1.06;
+      ball.vy = (landY - ball.y) / (0.72 * 60) * 1.06;
+
+      // O jogador contorna com agilidade veloz pelo flanco
+      const sideX = -dny, sideY = dnx;
+      const sideSign = (actor.y < defender.y) ? -1 : 1;
+      actor.vx = dnx * 6.2 + sideX * sideSign * 4.6;
+      actor.vy = dny * 6.2 + sideY * sideSign * 4.6;
+
+      addImpactSpark(ball.x, ball.y, '#facc15', 18, 1.25);
+      if (actor.isHuman) {
+        showPowerFeedback('Drible da Abelha · Chapeuzinho acrobático!', false, false);
+      }
+    } else {
+      // Corte rápido acrobático com mel
+      const cut = choosePhantomCut(actor);
+      actor.phantomDirectionX = cut.x;
+      actor.phantomDirectionY = cut.y;
+      actor.vx += cut.x * stats.cutForce * 1.15;
+      actor.vy += cut.y * stats.cutForce * 1.15;
+      ball.vx += cut.x * stats.cutForce * 0.85;
+      ball.vy += cut.y * stats.cutForce * 0.85;
+      addImpactSpark(ball.x, ball.y, '#fde047', 12, 1.0);
+      if (actor.isHuman) {
+        showPowerFeedback('Drible da Abelha · Dança do Monstro!', false, false);
+      }
+    }
   } else if (id === 'sprint') {
+    // A PANTERA DO CHIGIRI (HYOMA CHIGIRI) — Arranque Feral Rubi
     let dx = actor.facingX;
     let dy = actor.facingY;
     const len = Math.hypot(dx, dy) || 1;
     dx /= len;
     dy /= len;
-    actor.vx = dx * 8.8;
-    actor.vy = dy * 8.8;
-    actor.dashTimer = 0.72;
+    actor.vx = dx * 9.6;
+    actor.vy = dy * 9.6;
+    actor.dashTimer = 0.82;
+    addImpactSpark(actor.x, actor.y, '#f43f5e', 16, 1.35);
+    if (actor.isHuman) {
+      showPowerFeedback('A Pantera do Chigiri · Arranque feral!', false, false);
+    }
   } else if (id === 'ego') {
     actor.powerEffect = 'ego';
     actor.powerEffectTimer = 5;
@@ -517,6 +594,8 @@ function applyPower(id, actor) {
   } else if (id === 'vision') {
     actor.powerEffect = 'vision';
     actor.powerEffectTimer = 20;
+    actor.visionPassesLeft = 2; // máximo de 2 passes teleguiados por ativação
+    addImpactSpark(actor.x, actor.y, '#f9a8d4', 10, 0.9);
   } else if (id === 'shadow') {
     actor.powerEffect = 'shadow';
     actor.powerEffectTimer = 4;
@@ -801,6 +880,143 @@ function drawSkillAuras(renderCtx) {
       renderCtx.restore();
     }
   }
+
+  renderCtx.restore();
+}
+
+/* ==========================================================================
+   PROJEÇÃO DE TRAJETÓRIA DA BOLA — VISÃO DE CAMPO
+   Renderiza linha pontilhada luminosa mostrando onde a bola vai parar,
+   incluindo até 1 rebote em paredes laterais ou postes de trave.
+   Ativada somente enquanto 'vision' estiver ativa para player1.
+   ========================================================================== */
+function drawBallTrajectoryPrediction(renderCtx) {
+  if (player1.powerEffect !== 'vision' || player1.powerEffectTimer <= 0) return;
+
+  const speed = Math.hypot(ball.vx, ball.vy);
+  if (speed < 0.8) return; // bola praticamente parada — sem projeção útil
+
+  const p = CONFIG.pitch;
+  const g = CONFIG.goals;
+  const damp = CONFIG.physics.dampingBall;
+  const ballR = ball.radius;
+  const postR = CONFIG.goals.postRadius + ballR;
+
+  // Simulação passo a passo (máx 240 frames = ~4 s a 60fps)
+  let sx = ball.x, sy = ball.y;
+  let svx = ball.vx, svy = ball.vy;
+  const pathPoints = [{ x: sx, y: sy }];
+  let bounces = 0;
+  const maxBounces = 2;
+  const maxSteps = 240;
+  let stopped = false;
+
+  for (let step = 0; step < maxSteps; step++) {
+    svx *= damp;
+    svy *= damp;
+    sx += svx;
+    sy += svy;
+
+    // Rebote nas paredes verticais (superior/inferior) — apenas dentro do campo
+    if (bounces < maxBounces) {
+      if (sy - ballR < p.top) {
+        sy = p.top + ballR;
+        svy = -svy * CONFIG.physics.restitutionWall;
+        bounces++;
+        pathPoints.push({ x: sx, y: sy, isBounce: true });
+      } else if (sy + ballR > p.bottom) {
+        sy = p.bottom - ballR;
+        svy = -svy * CONFIG.physics.restitutionWall;
+        bounces++;
+        pathPoints.push({ x: sx, y: sy, isBounce: true });
+      }
+    }
+
+    // Rebote nos postes
+    if (bounces < maxBounces) {
+      for (const post of posts) {
+        const pdx = sx - post.x, pdy = sy - post.y;
+        const pdist = Math.hypot(pdx, pdy);
+        if (pdist < postR) {
+          const pnx = pdx / pdist, pny = pdy / pdist;
+          sx = post.x + pnx * postR;
+          sy = post.y + pny * postR;
+          const dot = svx * pnx + svy * pny;
+          svx -= 2 * dot * pnx * CONFIG.physics.restitutionWall;
+          svy -= 2 * dot * pny * CONFIG.physics.restitutionWall;
+          bounces++;
+          pathPoints.push({ x: sx, y: sy, isBounce: true });
+          break;
+        }
+      }
+    }
+
+    pathPoints.push({ x: sx, y: sy });
+
+    if (Math.hypot(svx, svy) < 0.35) { stopped = true; break; }
+  }
+
+  // Renderização da trilha pontilhada
+  renderCtx.save();
+  renderCtx.beginPath();
+  renderCtx.rect(0, 0, CONFIG.canvasWidth, CONFIG.canvasHeight);
+  renderCtx.clip();
+
+  const pulseFade = 0.55 + Math.sin(performance.now() / 180) * 0.22;
+
+  // Linha de fundo (glow rosa)
+  renderCtx.beginPath();
+  renderCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+  for (let i = 1; i < pathPoints.length; i++) {
+    if (!pathPoints[i].isBounce) renderCtx.lineTo(pathPoints[i].x, pathPoints[i].y);
+    else { renderCtx.moveTo(pathPoints[i].x, pathPoints[i].y); }
+  }
+  renderCtx.strokeStyle = 'rgba(249,168,212,0.28)';
+  renderCtx.lineWidth = 7;
+  renderCtx.setLineDash([]);
+  renderCtx.stroke();
+
+  // Linha pontilhada luminosa principal
+  renderCtx.beginPath();
+  renderCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+  for (let i = 1; i < pathPoints.length; i++) {
+    if (!pathPoints[i].isBounce) renderCtx.lineTo(pathPoints[i].x, pathPoints[i].y);
+    else { renderCtx.moveTo(pathPoints[i].x, pathPoints[i].y); }
+  }
+  renderCtx.strokeStyle = `rgba(252,231,243,${pulseFade * 0.9})`;
+  renderCtx.lineWidth = 2;
+  renderCtx.setLineDash([5, 6]);
+  renderCtx.stroke();
+  renderCtx.setLineDash([]);
+
+  // Marcadores de rebote
+  for (const pt of pathPoints) {
+    if (!pt.isBounce) continue;
+    renderCtx.beginPath();
+    renderCtx.arc(pt.x, pt.y, 5.5, 0, Math.PI * 2);
+    renderCtx.fillStyle = 'rgba(251,207,232,0.78)';
+    renderCtx.fill();
+    renderCtx.strokeStyle = '#f9a8d4';
+    renderCtx.lineWidth = 1.5;
+    renderCtx.stroke();
+  }
+
+  // Indicador do ponto final
+  const last = pathPoints[pathPoints.length - 1];
+  const endAlpha = stopped ? pulseFade * 0.85 : 0.5;
+
+  // Anel externo
+  renderCtx.beginPath();
+  renderCtx.arc(last.x, last.y, 10, 0, Math.PI * 2);
+  renderCtx.strokeStyle = `rgba(249,168,212,${endAlpha})`;
+  renderCtx.lineWidth = 2;
+  renderCtx.stroke();
+
+  // Ponto central
+  renderCtx.beginPath();
+  renderCtx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+  renderCtx.fillStyle = `rgba(252,231,243,${endAlpha})`;
+  renderCtx.fill();
 
   renderCtx.restore();
 }
