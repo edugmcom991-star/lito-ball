@@ -109,10 +109,10 @@ class Player {
     // Limite de velocidade máxima do botão
     const currentSpeed = Math.hypot(this.vx, this.vy);
     const maxSpeed =
-      this.snakeLungeTimer > 0 ? 12.2 :
-      this.dashTimer > 0 ? 10.5 :
-      this.twoOneRunTimer > 0 ? 7.6 :
-      this.ghostCutTimer > 0 ? 6.2 :
+      this.snakeLungeTimer > 0 ? 9.6 :
+      this.dashTimer > 0 ? 8.8 :
+      this.twoOneRunTimer > 0 ? 6.5 :
+      this.ghostCutTimer > 0 ? 5.3 :
       CONFIG.physics.playerMaxSpeed * (
         this.powerEffect === 'sprint' ? 1.32 :
         this.powerEffect === 'ego' ? 1.28 :
@@ -150,6 +150,7 @@ class Player {
       : this.radius + ball.radius + CONFIG.physics.kickReachMargin;
 
     if (dist <= kickReach) {
+      ball.visionPassFlight = null;
       this.kickRingTimer = 0.15;
       this.kickCooldownTimer = CONFIG.physics.kickCooldown;
       if (isPass) {
@@ -240,6 +241,9 @@ class Player {
 
       ball.vx = nx * power;
       ball.vy = ny * power;
+      if (kickMultiplier > 1.5 && !isSniperShot && !isPass && (!this.isHuman || input.kickKeyPressed) && typeof playPistolAnimation === 'function') {
+        playPistolAnimation(this, nx, ny);
+      }
       if (kickMultiplier > 1.5 || isSniperShot) {
         ball.powerShotTimer = Math.max(ball.powerShotTimer, 0.9);
         Sound.playCannon();
@@ -258,8 +262,8 @@ class Player {
       }
       if (hasEagleReach && this.powerEffect === 'eagle') {
         if (dist > this.radius + ball.radius + 6) {
-          this.vx += nx * 2.8;
-          this.vy += ny * 2.8;
+          this.vx += nx * 2.4;
+          this.vy += ny * 2.4;
         }
         addImpactSpark(ball.x, ball.y, '#38bdf8', 11, 1.15);
         this.powerEffect = null;
@@ -277,8 +281,8 @@ class Player {
       this.nextKickPower = 1;
       this.nextKickReach = 1;
 
-      this.vx -= nx * 0.6;
-      this.vy -= ny * 0.6;
+      this.vx -= nx * 0.5;
+      this.vy -= ny * 0.5;
 
       addImpactSpark(ball.x, ball.y);
       if (curvedKick) Sound.playCurvedKick();
@@ -429,7 +433,7 @@ class Player {
     if (this.powerEffect === 'vision') {
       renderCtx.beginPath();
       renderCtx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
-      renderCtx.strokeStyle = 'rgba(90, 220, 255, 0.9)';
+      renderCtx.strokeStyle = 'rgba(244, 114, 182, 0.92)';
       renderCtx.lineWidth = 2;
       renderCtx.setLineDash([4, 3]);
       renderCtx.stroke();
@@ -463,6 +467,10 @@ class Ball {
     this.passSource = null;
     this.passExpiry = 0;
     this.passWasVision = false;
+    this.visionPassFlight = null;
+    this.visionPassTrail = [];
+    this.pistolTrailTimer = 0;
+    this.pistolShotTrail = [];
   }
 
   reset(x, y) {
@@ -483,6 +491,10 @@ class Ball {
     this.passSource = null;
     this.passExpiry = 0;
     this.passWasVision = false;
+    this.visionPassFlight = null;
+    this.visionPassTrail = [];
+    this.pistolTrailTimer = 0;
+    this.pistolShotTrail = [];
   }
 
   update() {
@@ -539,6 +551,19 @@ class Ball {
     this.y += this.vy;
 
     this.enforceHardBounds();
+    if (this.visionPassFlight && !this.visionPassFlight.completed) {
+      this.visionPassTrail.push({ x: this.x, y: this.y });
+      if (this.visionPassTrail.length > 22) this.visionPassTrail.shift();
+    } else if (this.visionPassTrail.length) {
+      this.visionPassTrail.shift();
+    }
+    if (this.pistolTrailTimer > 0) {
+      this.pistolTrailTimer = Math.max(0, this.pistolTrailTimer - 1 / 60);
+      this.pistolShotTrail.push({ x: this.x, y: this.y });
+      if (this.pistolShotTrail.length > 15) this.pistolShotTrail.shift();
+    } else if (this.pistolShotTrail.length) {
+      this.pistolShotTrail.shift();
+    }
   }
 
   enforceHardBounds() {
@@ -599,6 +624,46 @@ class Ball {
   }
 
   draw(renderCtx) {
+    if (this.pistolShotTrail && this.pistolShotTrail.length > 1) {
+      renderCtx.save();
+      renderCtx.lineCap = 'round';
+      renderCtx.lineJoin = 'round';
+      for (let i = 1; i < this.pistolShotTrail.length; i++) {
+        const a = this.pistolShotTrail[i - 1];
+        const b = this.pistolShotTrail[i];
+        const t = i / this.pistolShotTrail.length;
+        renderCtx.beginPath();
+        renderCtx.moveTo(a.x, a.y);
+        renderCtx.lineTo(b.x, b.y);
+        renderCtx.strokeStyle = `rgba(251, 146, 60, ${t * 0.76})`;
+        renderCtx.lineWidth = 2 + t * 4;
+        renderCtx.shadowColor = '#f97316';
+        renderCtx.shadowBlur = 5 + t * 10;
+        renderCtx.stroke();
+      }
+      renderCtx.restore();
+    }
+
+    if (this.visionPassTrail && this.visionPassTrail.length > 1) {
+      renderCtx.save();
+      renderCtx.lineCap = 'round';
+      renderCtx.lineJoin = 'round';
+      for (let i = 1; i < this.visionPassTrail.length; i++) {
+        const a = this.visionPassTrail[i - 1];
+        const b = this.visionPassTrail[i];
+        const t = i / this.visionPassTrail.length;
+        renderCtx.beginPath();
+        renderCtx.moveTo(a.x, a.y);
+        renderCtx.lineTo(b.x, b.y);
+        renderCtx.strokeStyle = `rgba(244, 114, 182, ${t * 0.82})`;
+        renderCtx.lineWidth = 2 + t * 4;
+        renderCtx.shadowColor = '#f472b6';
+        renderCtx.shadowBlur = 5 + t * 9;
+        renderCtx.stroke();
+      }
+      renderCtx.restore();
+    }
+
     if (this.curveTrail && this.curveTrail.length) {
       renderCtx.save();
       renderCtx.lineCap = 'round';

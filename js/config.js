@@ -13,10 +13,10 @@ const ITEMS = {
     { id: 'decisao', name: 'Decisão Futebol Clube', price: 1500, description: 'Camisa azul e branca com escudo DFC.', colors: ['#1769aa', '#f2f7ff'], badge: 'DFC' }
   ],
   powers: [
-    { id: 'cannon', name: 'Chute de Canhão', price: 1000, description: 'Próximo chute ganha força explosiva.' },
+    { id: 'cannon', name: 'Chute de Pistola', price: 1000, description: 'Arma o próximo chute com força explosiva e animação de disparo.' },
     { id: 'sprint', name: 'Arrancada Relâmpago', price: 800, description: 'Explosão de velocidade por 4 segundos.' },
     { id: 'phantom', name: 'Drible Fantasma', price: 1200, description: 'Com a bola dominada, corta para o lado e escapa de botes.' },
-    { id: 'vision', name: 'Visão de Campo', price: 1000, description: 'Por 20s, revela padrões táticos, dá velocidade e libera passes teleguiados.' },
+    { id: 'vision', name: 'Visão de Campo', price: 1000, description: 'Por 20s, revela padrões táticos, aumenta a velocidade e libera um passe longo, curvo e teleguiado para um aliado.' },
     { id: 'curve', name: 'Curva Impossível', price: 1200, description: 'Mostra a prévia em arco e dispara um chute com efeito Magnus letal rumo ao gol.' },
     { id: 'twoOne', name: 'Toque e Passa', price: 1500, description: 'Tabela rápida com devolução de primeira e arrancada.' },
     { id: 'snakeTackle', name: 'Bote da Serpente', price: 1500, description: 'Avança em bote instantâneo contra o portador para desarmar com precisão.' },
@@ -29,7 +29,7 @@ const ITEMS = {
 };
 
 const SKILL_ICONS = {
-  cannon: '💥',
+  cannon: '🔫',
   sprint: '⚡',
   phantom: '👻',
   vision: '👁️',
@@ -142,15 +142,15 @@ const CONFIG = {
   // Calibração da Física
   physics: {
     fixedDelta: 1 / 60,       // 60 atualizações por segundo cravadas
-    playerAcceleration: 0.44, // Aceleração suave por frame
-    playerMaxSpeed: 4.8,      // Velocidade máxima cadenciada do botão
+    playerAcceleration: 0.3249, // Aceleração mais 5% menor para um ritmo mais controlado
+    playerMaxSpeed: 3.705,      // Velocidade máxima dos jogadores mais 5% menor
     dampingPlayer: 0.92,      // Amortecimento inercial do botão
     dampingBall: 0.988,       // Desaceleração orgânica da bola no gramado
-    ballMaxSpeed: 12.8,       // Limite de velocidade seguro contra tunelamento
+    ballMaxSpeed: 9.747,      // Limite de velocidade da bola mais 5% menor
     restitutionPlayer: 0.65,  // Choque elástico entre botões
     restitutionBall: 0.82,    // Quique da bola em corpos rígidos
     restitutionWall: 0.85,    // Quique da bola em paredes e postes
-    kickPower: 9.6,           // Força direcional do chute
+    kickPower: 7.4005,        // Força base do chute mais 5% menor
     kickReachMargin: 9,       // Distância de alcance para acionar o chute
     kickCooldown: 0.28        // Tempo mínimo entre chutes (segundos)
   }

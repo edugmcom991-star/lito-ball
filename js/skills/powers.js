@@ -10,7 +10,152 @@ let twoOnePlay = null;
 let twoOneImpactTimer = 0;
 let visionPassRoute = null;
 let powerReadyLast = true;
+const pistolAnimations = [];
+const pistolSpriteFrames = [];
+const PISTOL_FRAME_WIDTH = 320;
+const PISTOL_FRAME_HEIGHT = 240;
+const PISTOL_PIVOT_X = 100;
+const PISTOL_PIVOT_Y = 112;
+// Preparação, alinhamento, clarão, recuo e fumaça final.
+const PISTOL_FRAME_DURATIONS = [0.03, 0.02, 0.07, 0.13, 0.22];
+// Recortes medidos na imagem original; os pivôs mantêm o tambor alinhado entre quadros.
+const PISTOL_FRAME_SPECS = [
+  { x: 32, y: 237, width: 175, height: 118, pivotX: 108, pivotY: 266 },
+  { x: 228, y: 237, width: 180, height: 118, pivotX: 307, pivotY: 267 },
+  { x: 420, y: 178, width: 225, height: 177, pivotX: 474, pivotY: 261 },
+  { x: 650, y: 145, width: 149, height: 210, pivotX: 700, pivotY: 258 },
+  { x: 818, y: 145, width: 188, height: 210, pivotX: 921, pivotY: 265 }
+];
+const PISTOL_FRAME_NUMBER_RECTS = [
+  { left: 18, top: 197, right: 40, bottom: 222 },
+  { left: 215, top: 197, right: 238, bottom: 222 },
+  { left: 416, top: 197, right: 440, bottom: 222 },
+  { left: 615, top: 197, right: 639, bottom: 222 },
+  { left: 814, top: 197, right: 840, bottom: 222 }
+];
 
+assets.loadSprite('pistolSheet', 'img/pistola.png').then(preparePistolFrames).catch(() => {});
+
+function preparePistolFrames(sheet) {
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = sheet.naturalWidth;
+  sourceCanvas.height = sheet.naturalHeight;
+  const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  sourceCtx.drawImage(sheet, 0, 0);
+  const source = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+  const background = { r: 62, g: 65, b: 73 };
+
+  for (let frameIndex = 0; frameIndex < PISTOL_FRAME_SPECS.length; frameIndex++) {
+    const spec = PISTOL_FRAME_SPECS[frameIndex];
+    const frameCanvas = document.createElement('canvas');
+    frameCanvas.width = PISTOL_FRAME_WIDTH;
+    frameCanvas.height = PISTOL_FRAME_HEIGHT;
+    const frameCtx = frameCanvas.getContext('2d');
+    const frame = frameCtx.createImageData(PISTOL_FRAME_WIDTH, PISTOL_FRAME_HEIGHT);
+    const offsetX = PISTOL_PIVOT_X - (spec.pivotX - spec.x);
+    const offsetY = PISTOL_PIVOT_Y - (spec.pivotY - spec.y);
+
+    for (let sourceY = spec.y; sourceY < spec.y + spec.height; sourceY++) {
+      for (let sourceX = spec.x; sourceX < spec.x + spec.width; sourceX++) {
+        const x = offsetX + sourceX - spec.x;
+        const y = offsetY + sourceY - spec.y;
+        if (x < 0 || x >= PISTOL_FRAME_WIDTH || y < 0 || y >= PISTOL_FRAME_HEIGHT) continue;
+
+        const sourceIndex = (sourceY * source.width + sourceX) * 4;
+        const frameIndexOffset = (y * PISTOL_FRAME_WIDTH + x) * 4;
+        const r = source.data[sourceIndex];
+        const g = source.data[sourceIndex + 1];
+        const b = source.data[sourceIndex + 2];
+        const deltaR = r - background.r;
+        const deltaG = g - background.g;
+        const deltaB = b - background.b;
+        const backgroundDistance = Math.hypot(deltaR, deltaG, deltaB);
+        const numberRect = PISTOL_FRAME_NUMBER_RECTS[frameIndex];
+        const isNumberLabel = sourceX >= numberRect.left && sourceX <= numberRect.right && sourceY >= numberRect.top && sourceY <= numberRect.bottom;
+        const isPanelRule = ((sourceY >= 196 && sourceY <= 198) ||
+          (sourceX >= 206 && sourceX <= 208) ||
+          (sourceX >= 606 && sourceX <= 610) ||
+          (sourceX >= 796 && sourceX <= 802) ||
+          (sourceX >= 1004 && sourceX <= 1008)) && Math.hypot(r - 35, g - 39, b - 44) < 15;
+
+        let alpha = source.data[sourceIndex + 3];
+        if (isNumberLabel || isPanelRule || backgroundDistance <= 14) {
+          alpha = 0;
+        } else if (backgroundDistance < 27) {
+          alpha = Math.round(alpha * (backgroundDistance - 14) / 13);
+        }
+
+        frame.data[frameIndexOffset] = r;
+        frame.data[frameIndexOffset + 1] = g;
+        frame.data[frameIndexOffset + 2] = b;
+        frame.data[frameIndexOffset + 3] = alpha;
+      }
+    }
+    frameCtx.putImageData(frame, 0, 0);
+    pistolSpriteFrames.push(frameCanvas);
+  }
+}
+
+function playPistolAnimation(actor, dirX, dirY) {
+  const angle = Math.atan2(dirY, dirX);
+  const side = -actor.radius * 1.9;
+  const forward = actor.radius * 0.42;
+  const perpendicularX = -Math.sin(angle);
+  const perpendicularY = Math.cos(angle);
+  pistolAnimations.push({
+    x: actor.x + Math.cos(angle) * forward + perpendicularX * side,
+    y: actor.y + Math.sin(angle) * forward + perpendicularY * side,
+    angle,
+    elapsed: 0,
+    frame: 0
+  });
+  ball.pistolTrailTimer = 0.62;
+  ball.pistolShotTrail.length = 0;
+}
+
+function updatePistolAnimations(dt) {
+  if (!pistolSpriteFrames.length) return;
+  for (let i = pistolAnimations.length - 1; i >= 0; i--) {
+    const animation = pistolAnimations[i];
+    animation.elapsed += dt;
+    while (animation.frame < PISTOL_FRAME_DURATIONS.length && animation.elapsed >= PISTOL_FRAME_DURATIONS[animation.frame]) {
+      animation.elapsed -= PISTOL_FRAME_DURATIONS[animation.frame];
+      animation.frame++;
+    }
+    if (animation.frame >= PISTOL_FRAME_DURATIONS.length) pistolAnimations.splice(i, 1);
+  }
+}
+
+function clearPistolAnimations() {
+  pistolAnimations.length = 0;
+}
+
+function drawPistolAnimations(renderCtx) {
+  if (!pistolSpriteFrames.length) return;
+  renderCtx.save();
+  renderCtx.imageSmoothingEnabled = false;
+  for (const animation of pistolAnimations) {
+    const frame = pistolSpriteFrames[animation.frame];
+    if (!frame) continue;
+    renderCtx.save();
+    renderCtx.translate(animation.x, animation.y);
+    renderCtx.rotate(animation.angle);
+    if (animation.frame === pistolSpriteFrames.length - 1) {
+      const duration = PISTOL_FRAME_DURATIONS[animation.frame];
+      renderCtx.globalAlpha = Math.max(0, 1 - animation.elapsed / duration);
+    }
+    const scale = 0.46;
+    renderCtx.drawImage(
+      frame,
+      -PISTOL_PIVOT_X * scale,
+      -PISTOL_PIVOT_Y * scale,
+      PISTOL_FRAME_WIDTH * scale,
+      PISTOL_FRAME_HEIGHT * scale
+    );
+    renderCtx.restore();
+  }
+  renderCtx.restore();
+}
 function phantomLevelFor(actor) {
   return actor.isHuman ? Math.max(1, Math.min(3, Number(profile.powerLevels.phantom) || 1)) : 1;
 }
@@ -21,7 +166,7 @@ function phantomStats(actor) {
     level,
     duration: [0, 0.55, 0.60, 0.65][level],
     dodgeChance: [0, 0.38, 0.44, 0.50][level],
-    cutForce: [0, 4.8, 5.1, 5.4][level],
+    cutForce: [0, 4.0, 4.3, 4.6][level],
     cooldown: [0, 12, 11.25, 10.5][level]
   };
 }
@@ -122,6 +267,164 @@ function updatePlayerDribbleControl(actor) {
 function nearestPassTeammate(actor) {
   const candidates = [homeMate].filter(teammate => teammate !== actor);
   return candidates.sort((a, b) => Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y))[0] || null;
+}
+
+function visionPassTargets(actor) {
+  if (gameMode !== '2v2' && gameMode !== 'training') return [];
+  return actor === player1 || actor === homeMate ? [actor === player1 ? homeMate : player1] : [];
+}
+
+function getVisionPassTarget(actor) {
+  const targets = visionPassTargets(actor);
+  if (!targets.length) return null;
+  if (targets.length === 1 || !curveMouseAim?.active) return targets[0];
+  return targets.reduce((closest, target) =>
+    Math.hypot(target.x - curveMouseAim.x, target.y - curveMouseAim.y) <
+      Math.hypot(closest.x - curveMouseAim.x, closest.y - curveMouseAim.y) ? target : closest
+  );
+}
+
+function getVisionPassControlPoint(from, to, actor) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const bend = Math.min(128, Math.max(42, length * 0.17));
+  const midX = (from.x + to.x) * 0.5;
+  const midY = (from.y + to.y) * 0.5;
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  const opponents = actor === player1 || actor === homeMate
+    ? [player2, ...(gameMode === '2v2' ? [awayMate] : [])]
+    : [player1, ...(gameMode === '2v2' ? [homeMate] : [])];
+  const scoreSide = side => {
+    const pitch = CONFIG.pitch;
+    const cx = Math.max(pitch.left + 32, Math.min(pitch.right - 32, midX + normalX * bend * side));
+    const cy = Math.max(pitch.top + 32, Math.min(pitch.bottom - 32, midY + normalY * bend * side));
+    let clearance = Infinity;
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10;
+      const u = 1 - t;
+      const x = u * u * from.x + 2 * u * t * cx + t * t * to.x;
+      const y = u * u * from.y + 2 * u * t * cy + t * t * to.y;
+      for (const opponent of opponents) {
+        clearance = Math.min(clearance, Math.hypot(x - opponent.x, y - opponent.y) - opponent.radius);
+      }
+      for (const post of posts) {
+        clearance = Math.min(clearance, Math.hypot(x - post.x, y - post.y) - post.radius - 8);
+      }
+    }
+    return clearance;
+  };
+  const side = scoreSide(1) >= scoreSide(-1) ? 1 : -1;
+  const pitch = CONFIG.pitch;
+  return {
+    x: Math.max(pitch.left + 32, Math.min(pitch.right - 32, midX + normalX * bend * side)),
+    y: Math.max(pitch.top + 32, Math.min(pitch.bottom - 32, midY + normalY * bend * side))
+  };
+}
+
+function getVisionPassPath(from, to, control) {
+  const points = [];
+  let length = 0;
+  let previous = from;
+  for (let i = 0; i <= 32; i++) {
+    const t = i / 32;
+    const u = 1 - t;
+    const point = {
+      x: u * u * from.x + 2 * u * t * control.x + t * t * to.x,
+      y: u * u * from.y + 2 * u * t * control.y + t * t * to.y
+    };
+    if (i) length += Math.hypot(point.x - previous.x, point.y - previous.y);
+    points.push(point);
+    previous = point;
+  }
+  return { points, length };
+}
+
+function launchVisionLongPass(actor, target) {
+  if (!target || !actor.tryKick(ball, 0, 0, true, target)) return false;
+  const start = { x: ball.x, y: ball.y };
+  const end = { x: target.x, y: target.y };
+  const control = getVisionPassControlPoint(start, end, actor);
+  const path = getVisionPassPath(start, end, control);
+  const duration = Math.max(0.45, Math.min(3.0, path.length / (7.2 * 60)));
+  ball.visionPassTrail.length = 0;
+  ball.visionPassFlight = { start, control, elapsed: 0, duration, completed: false };
+  ball.passExpiry = duration + 0.8;
+  ball.visionPassAssistTimer = 0;
+  ball.visionPassAssistEnabled = false;
+  return true;
+}
+
+function updateVisionLongPassFlight(dt) {
+  const flight = ball.visionPassFlight;
+  const target = ball.passTarget;
+  if (!flight || flight.completed || !target) return;
+  const nextElapsed = Math.min(flight.duration, flight.elapsed + dt);
+  const t = nextElapsed / flight.duration;
+  const u = 1 - t;
+  const nextX = u * u * flight.start.x + 2 * u * t * flight.control.x + t * t * target.x;
+  const nextY = u * u * flight.start.y + 2 * u * t * flight.control.y + t * t * target.y;
+  const damping = CONFIG.physics.dampingBall || 1;
+  const settle = Math.max(0, Math.min(1, (t - 0.86) / 0.14));
+  const pathVx = nextX - ball.x;
+  const pathVy = nextY - ball.y;
+  ball.vx = (pathVx * (1 - settle) + target.vx * settle) / damping;
+  ball.vy = (pathVy * (1 - settle) + target.vy * settle) / damping;
+  flight.elapsed = nextElapsed;
+  if (flight.elapsed >= flight.duration) flight.completed = true;
+}
+
+function stopVisionPassFlightOnInterception() {
+  if (!ball.visionPassFlight || ball.visionPassFlight.completed) return;
+  const opponents = [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
+  if (opponents.some(opponent => Math.hypot(ball.x - opponent.x, ball.y - opponent.y) <= opponent.radius + ball.radius + 1)) {
+    ball.visionPassFlight.completed = true;
+  }
+}
+
+function drawVisionLongPassPreview(renderCtx) {
+  if ((gameMode !== '2v2' && gameMode !== 'training') || player1.powerEffect !== 'vision' || player1.powerEffectTimer <= 0 || !isBallControlledBy(player1)) return;
+  const target = getVisionPassTarget(player1);
+  if (!target) return;
+  const from = { x: ball.x, y: ball.y };
+  const to = { x: target.x, y: target.y };
+  const control = getVisionPassControlPoint(from, to, player1);
+
+  renderCtx.save();
+  renderCtx.beginPath();
+  renderCtx.rect(CONFIG.pitch.left, CONFIG.pitch.top, CONFIG.pitch.width, CONFIG.pitch.height);
+  renderCtx.clip();
+  renderCtx.lineCap = 'round';
+  renderCtx.lineJoin = 'round';
+  renderCtx.globalAlpha = 0.48;
+  renderCtx.strokeStyle = '#f472b6';
+  renderCtx.lineWidth = 9;
+  renderCtx.beginPath();
+  renderCtx.moveTo(from.x, from.y);
+  renderCtx.quadraticCurveTo(control.x, control.y, to.x, to.y);
+  renderCtx.stroke();
+  renderCtx.globalAlpha = 0.86;
+  renderCtx.strokeStyle = '#fbcfe8';
+  renderCtx.lineWidth = 2.2;
+  renderCtx.setLineDash([4, 7]);
+  renderCtx.beginPath();
+  renderCtx.moveTo(from.x, from.y);
+  renderCtx.quadraticCurveTo(control.x, control.y, to.x, to.y);
+  renderCtx.stroke();
+  renderCtx.setLineDash([]);
+  renderCtx.globalAlpha = 0.9;
+  renderCtx.strokeStyle = '#f9a8d4';
+  renderCtx.lineWidth = 2.5;
+  renderCtx.beginPath();
+  renderCtx.arc(target.x, target.y, target.radius + 13, 0, Math.PI * 2);
+  renderCtx.stroke();
+  renderCtx.fillStyle = '#fce7f3';
+  renderCtx.font = 'bold 11px "Segoe UI", Arial, sans-serif';
+  renderCtx.textAlign = 'center';
+  renderCtx.textBaseline = 'bottom';
+  renderCtx.fillText('ALVO DO PASSE', target.x, target.y - target.radius - 17);
+  renderCtx.restore();
 }
 
 function getTwoOneEligibleTargets(actor) {
@@ -385,12 +688,29 @@ function chooseVisionRunDirection(mate) {
 }
 
 function updateTwoVtwoPassProgress(dt) {
-  if (gameMode !== '2v2' || !twoVtwoStats) return;
   if (visionPassRoute) {
     visionPassRoute.timer = Math.max(0, visionPassRoute.timer - dt);
     if (!visionPassRoute.timer) visionPassRoute = null;
   }
   if (ball.passExpiry > 0) ball.passExpiry = Math.max(0, ball.passExpiry - dt);
+  if (gameMode !== '2v2' || !twoVtwoStats) {
+    if (ball.visionPassFlight) {
+      const target = ball.passTarget;
+      const opponents = [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
+      if (target && isBallReceivedBy(target)) {
+        ball.visionPassFlight = null;
+        ball.passTarget = null;
+        ball.passSource = null;
+        ball.passExpiry = 0;
+      } else if (opponents.some(isBallControlledBy) || ball.passExpiry <= 0) {
+        ball.visionPassFlight = null;
+        ball.passTarget = null;
+        ball.passSource = null;
+        ball.passExpiry = 0;
+      }
+    }
+    return;
+  }
   if (!ball.passTarget) {
     if (isBallControlledBy(player2) || isBallControlledBy(awayMate)) {
       twoVtwoStats.passStreak = 0;
@@ -401,6 +721,7 @@ function updateTwoVtwoPassProgress(dt) {
   const target = ball.passTarget;
   const source = ball.passSource;
   if (isBallReceivedBy(target)) {
+    ball.visionPassFlight = null;
     const teammatePass = (source === player1 && target === homeMate) || (source === homeMate && target === player1);
     if (teammatePass) {
       twoVtwoStats.passStreak++;
@@ -412,7 +733,9 @@ function updateTwoVtwoPassProgress(dt) {
       homeMate.visionRunDirectionX = run.x;
       homeMate.visionRunDirectionY = run.y;
       homeMate.visionRunTimer = 0.46;
-      visionPassRoute = { from: { x: player1.x, y: player1.y }, to: { x: homeMate.x, y: homeMate.y }, timer: 1.35, maxTimer: 1.35 };
+      const from = { x: player1.x, y: player1.y };
+      const to = { x: homeMate.x, y: homeMate.y };
+      visionPassRoute = { from, to, control: getVisionPassControlPoint(from, to, player1), timer: 1.35, maxTimer: 1.35 };
       showPowerFeedback('Passe encaixado · parceiro ataca o espaço', true, false);
     }
     ball.passTarget = null;
@@ -424,6 +747,7 @@ function updateTwoVtwoPassProgress(dt) {
   const intercepted = isBallControlledBy(player2) || isBallControlledBy(awayMate);
   const possessionChanged = (isBallControlledBy(player1) || isBallControlledBy(homeMate)) && source !== ball.dribbleLockOwner;
   if (intercepted || ball.passExpiry <= 0 || possessionChanged) {
+    ball.visionPassFlight = null;
     twoVtwoStats.passStreak = 0;
     if (intercepted) twoVtwoStats.goalAssistPending = false;
     ball.passTarget = null;
@@ -484,7 +808,9 @@ function applyPower(id, actor) {
     return false;
   }
 
-  if (id === 'cannon') actor.nextKickPower = 1.65;
+  if (id === 'cannon') {
+    actor.nextKickPower = 1.65;
+  }
   else if (id === 'curve') {
     actor.powerEffect = 'curve';
     actor.powerEffectTimer = 6.0;
@@ -549,8 +875,8 @@ function applyPower(id, actor) {
     const len = Math.hypot(dx, dy) || 1;
     dx /= len;
     dy /= len;
-    actor.vx = dx * 10.5;
-    actor.vy = dy * 10.5;
+    actor.vx = dx * 8.8;
+    actor.vy = dy * 8.8;
     actor.dashTimer = 0.72;
   } else if (id === 'ego') {
     actor.powerEffect = 'ego';
@@ -621,7 +947,7 @@ function drawVisionPuzzleOverlay(renderCtx) {
   renderCtx.beginPath();
   renderCtx.rect(p.left, p.top, p.width, p.height);
   renderCtx.clip();
-  renderCtx.strokeStyle = '#9be7ff';
+  renderCtx.strokeStyle = '#f9a8d4';
   renderCtx.lineWidth = 1.25;
   renderCtx.globalAlpha = 0.105;
   for (let row = 0, y = p.top; y < p.bottom; y += size, row++) {
@@ -670,49 +996,36 @@ function drawTwoVtwoVisionGuidance(renderCtx) {
   renderCtx.setLineDash([5, 5]);
   const pulse = 0.62 + Math.sin(performance.now() / 130) * 0.16;
   renderCtx.globalAlpha = pulse;
-  renderCtx.strokeStyle = '#baf4ff';
+  renderCtx.strokeStyle = '#f9a8d4';
   renderCtx.lineWidth = 2;
   renderCtx.beginPath();
   renderCtx.arc(homeMate.x, homeMate.y, homeMate.radius + 11, 0, Math.PI * 2);
   renderCtx.stroke();
 
-  const p = CONFIG.pitch;
-  const ideas = [{ x: 1, y: -0.65 }, { x: 1, y: 0.65 }, { x: 0.65, y: -1 }, { x: 0.65, y: 1 }];
-  for (const idea of ideas) {
-    const length = Math.hypot(idea.x, idea.y);
-    const x = homeMate.x + idea.x / length * 90;
-    const y = homeMate.y + idea.y / length * 90;
-    if (x < p.left + 25 || x > p.right - 25 || y < p.top + 25 || y > p.bottom - 25) continue;
-    const nearest = Math.min(Math.hypot(x - player2.x, y - player2.y), Math.hypot(x - awayMate.x, y - awayMate.y));
-    if (nearest < 42) continue;
-    renderCtx.globalAlpha = 0.22 + Math.min(0.24, nearest / 500);
-    renderCtx.beginPath();
-    renderCtx.arc(x, y, 9, 0, Math.PI * 2);
-    renderCtx.stroke();
-  }
   renderCtx.setLineDash([]);
 
   if (visionPassRoute) {
     const alpha = Math.min(1, visionPassRoute.timer / visionPassRoute.maxTimer);
     renderCtx.globalAlpha = alpha * 0.68;
-    renderCtx.strokeStyle = '#c8f7ff';
+    renderCtx.strokeStyle = '#f472b6';
     renderCtx.lineWidth = 3;
     renderCtx.beginPath();
     renderCtx.moveTo(visionPassRoute.from.x, visionPassRoute.from.y);
-    renderCtx.lineTo(visionPassRoute.to.x, visionPassRoute.to.y);
+    renderCtx.quadraticCurveTo(visionPassRoute.control.x, visionPassRoute.control.y, visionPassRoute.to.x, visionPassRoute.to.y);
     renderCtx.stroke();
     const count = 5;
     for (let i = 1; i < count; i++) {
       const t = i / count;
-      const x = visionPassRoute.from.x + (visionPassRoute.to.x - visionPassRoute.from.x) * t;
-      const y = visionPassRoute.from.y + (visionPassRoute.to.y - visionPassRoute.from.y) * t;
+      const u = 1 - t;
+      const x = u * u * visionPassRoute.from.x + 2 * u * t * visionPassRoute.control.x + t * t * visionPassRoute.to.x;
+      const y = u * u * visionPassRoute.from.y + 2 * u * t * visionPassRoute.control.y + t * t * visionPassRoute.to.y;
       renderCtx.beginPath();
       renderCtx.arc(x, y, 4.5, 0, Math.PI * 2);
-      renderCtx.fillStyle = '#e3fbff';
+      renderCtx.fillStyle = '#fce7f3';
       renderCtx.fill();
       renderCtx.beginPath();
       renderCtx.arc(x, y, 7.5, 0, Math.PI * 2);
-      renderCtx.strokeStyle = '#9eeaff';
+      renderCtx.strokeStyle = '#f9a8d4';
       renderCtx.lineWidth = 1;
       renderCtx.stroke();
     }

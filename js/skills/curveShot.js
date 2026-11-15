@@ -283,8 +283,8 @@ function launchCurveShot(actor, isPass = false, passTarget = null) {
   actor.powerCooldown = POWER_COOLDOWNS.curve;
   actor.nextKickPower = 1;
   actor.nextKickReach = 1;
-  actor.vx -= dirX * 0.7;
-  actor.vy -= dirY * 0.7;
+  actor.vx -= dirX * 0.6;
+  actor.vy -= dirY * 0.6;
 
   if (gameMode === 'training' && actor === player1) {
     trainingDummyHasBall = false;

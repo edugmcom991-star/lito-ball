@@ -123,6 +123,7 @@ const input = {
   left: false,
   right: false,
   kickRequested: false,
+  kickKeyPressed: false,
   passRequested: false
 };
 
@@ -137,6 +138,7 @@ function triggerCountdown(seconds = 3.0) {
   gameState.goBannerTimer = 0;
   gameState.lastCountdownBeep = Math.ceil(seconds) + 1;
   input.kickRequested = false;
+  input.kickKeyPressed = false;
   input.passRequested = false;
   updateCountdownOverlay();
 }
@@ -192,7 +194,10 @@ window.addEventListener('keydown', e => {
   if (!twoOnePlay && (code === 'KeyD' || code === 'ArrowRight')) input.right = true;
 
   if (code === controlsConfig.kickKey) {
-    if (!twoOnePlay) input.kickRequested = true;
+    if (!twoOnePlay) {
+      input.kickRequested = true;
+      input.kickKeyPressed = true;
+    }
     e.preventDefault();
   }
 
@@ -219,7 +224,10 @@ window.addEventListener('keyup', e => {
   if (code === 'KeyS' || code === 'ArrowDown') input.down = false;
   if (code === 'KeyA' || code === 'ArrowLeft') input.left = false;
   if (code === 'KeyD' || code === 'ArrowRight') input.right = false;
-  if (code === controlsConfig.kickKey) input.kickRequested = false;
+  if (code === controlsConfig.kickKey) {
+    input.kickRequested = false;
+    input.kickKeyPressed = false;
+  }
   if (code === 'KeyF') input.passRequested = false;
 });
 
@@ -451,6 +459,7 @@ function resetPositions() {
   twoOneSelection = null;
   twoOnePlay = null;
   twoOneImpactTimer = 0;
+  clearPistolAnimations();
   const p = CONFIG.pitch;
 
   if (gameMode === '2v2') {
@@ -570,6 +579,7 @@ function beginTraining() {
   twoOneSelection = null;
   twoOnePlay = null;
   twoOneImpactTimer = 0;
+  clearPistolAnimations();
   trainingDummyHasBall = true;
 
   player1.reset(CONFIG.pitch.centerX - 200, CONFIG.pitch.centerY);
@@ -591,6 +601,7 @@ function beginTraining() {
 
   input.passRequested = false;
   input.kickRequested = false;
+  input.kickKeyPressed = false;
 
   document.getElementById('hud-score').hidden = true;
   timerEl.hidden = true;
@@ -725,6 +736,7 @@ function startFreshMatch(mode = 'match') {
 
   input.passRequested = false;
   input.kickRequested = false;
+  input.kickKeyPressed = false;
   input.up = false;
   input.down = false;
   input.left = false;
@@ -920,6 +932,7 @@ function physicsStep(dt) {
       Sound.playCountdownTick(true);
     }
     input.kickRequested = false;
+    input.kickKeyPressed = false;
     input.passRequested = false;
     updateCountdownOverlay();
     return;
@@ -1019,6 +1032,15 @@ function physicsStep(dt) {
         // aguarda conclusão da tabela
       } else if (twoOneSelection) {
         confirmTwoOneSelection();
+      } else if ((gameMode === '2v2' || gameMode === 'training') && player1.powerEffect === 'vision' && player1.powerEffectTimer > 0) {
+        const teammate = getVisionPassTarget(player1);
+        if (!teammate) {
+          showPowerFeedback('Nenhum aliado disponível para o passe da Visão', true);
+        } else if (!isBallControlledBy(player1)) {
+          showPowerFeedback('Domine a bola para preparar o passe da Visão', true);
+        } else if (!launchVisionLongPass(player1, teammate)) {
+          showPowerFeedback(player1.kickCooldownTimer > 0 ? 'Aguarde para passar' : 'Não foi possível alcançar a bola', true);
+        }
       } else {
         const teammate = nearestPassTeammate(player1);
         const teammateDistance = teammate ? Math.hypot(teammate.x - player1.x, teammate.y - player1.y) : Infinity;
@@ -1049,6 +1071,8 @@ function physicsStep(dt) {
     }
   }
 
+  updatePistolAnimations(dt);
+
   if (twoOnePlay && twoOnePlay.runTimer > 0) {
     const d = twoOnePlay.runDirection;
     player1.vx += d.x * CONFIG.physics.playerAcceleration * 1.8;
@@ -1077,6 +1101,7 @@ function physicsStep(dt) {
 
   updateVisionPassAssist(dt);
   updateTwoOneReturnAssist(dt);
+  updateVisionLongPassFlight(dt);
 
   if (player1.dashTimer > 0) addLightningTrail(player1);
   if (gameMode === '2v2') {
@@ -1138,6 +1163,7 @@ function physicsStep(dt) {
     if (gameMode === '2v2') resolveCircleSegment(awayMate, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
   }
 
+  stopVisionPassFlightOnInterception();
   resolveBallBoundaries(ball);
   updateTwoOneState(dt);
   updateTwoVtwoPassProgress(dt);
@@ -1177,6 +1203,7 @@ function gameLoop(timestamp) {
   drawPitch(ctx);
   drawVisionPuzzleOverlay(ctx);
   drawTwoVtwoVisionGuidance(ctx);
+  drawVisionLongPassPreview(ctx);
 
   for (let i = 0; i < posts.length; i++) posts[i].draw(ctx);
   updateAndDrawParticles(ctx);
@@ -1191,6 +1218,7 @@ function gameLoop(timestamp) {
   if (gameMode === 'training' || gameMode === '2v2') homeMate.draw(ctx);
   player2.draw(ctx);
   if (gameMode === '2v2') awayMate.draw(ctx);
+  drawPistolAnimations(ctx);
   updatePowerHud();
 
   requestAnimationFrame(gameLoop);

@@ -194,8 +194,8 @@ function startSnakeTackle(actor) {
   actor.snakeLungeTimer = 0.19;
 
   // Impulso inicial instantâneo e agressivo
-  actor.vx = dirX * 11.4;
-  actor.vy = dirY * 11.4;
+  actor.vx = dirX * 9.5;
+  actor.vy = dirY * 9.5;
 
   const tackle = {
     owner: actor,
@@ -252,8 +252,8 @@ function resolveSnakeDisarm(tackle) {
   // Atordoa e afasta levemente o portador rival para garantir desarme limpo e sem RNG
   if (targetCarrier) {
     targetCarrier.tackleStaggerTimer = 0.72;
-    targetCarrier.vx = -dirX * 2.4 + (targetCarrier.x > actor.x ? 1.2 : -1.2);
-    targetCarrier.vy = -dirY * 2.4 + (Math.random() - 0.5) * 0.8;
+    targetCarrier.vx = -dirX * 1.9 + (targetCarrier.x > actor.x ? 0.9 : -0.9);
+    targetCarrier.vy = -dirY * 1.9 + (Math.random() - 0.5) * 0.6;
   }
 
   if (gameMode === 'training') {
@@ -275,12 +275,12 @@ function resolveSnakeDisarm(tackle) {
   const clampedBall = clampSnakePoint(actor.x + dirX * placeDist, actor.y + dirY * placeDist, ball.radius);
   ball.x = clampedBall.x;
   ball.y = clampedBall.y;
-  ball.vx = dirX * 5.2;
-  ball.vy = dirY * 5.2;
+  ball.vx = dirX * 4.4;
+  ball.vy = dirY * 4.4;
 
   actor.ignoreBallCollisionFrames = 3;
-  actor.vx = dirX * 4.5;
-  actor.vy = dirY * 4.5;
+  actor.vx = dirX * 3.8;
+  actor.vy = dirY * 3.8;
 
   addImpactSpark(ball.x, ball.y, '#e9d5ff', 14, 1.35);
   addSnakeParticles(ball.x, ball.y, 18, true);
@@ -300,8 +300,8 @@ function updateSnakeTackles(dt) {
       const progress = 1 - tackle.timer / tackle.phaseDuration;
       // Mantém propulsão controlada até o ponto de contato
       if (tackle.timer > 0) {
-        actor.vx = tackle.dirX * (11.2 - progress * 4.5);
-        actor.vy = tackle.dirY * (11.2 - progress * 4.5);
+        actor.vx = tackle.dirX * (9.4 - progress * 3.8);
+        actor.vy = tackle.dirY * (9.4 - progress * 3.8);
       }
       tackle.trail.push({ x: actor.x, y: actor.y });
       if (tackle.trail.length > 10) tackle.trail.shift();

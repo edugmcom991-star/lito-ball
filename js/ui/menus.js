@@ -107,11 +107,14 @@ function updatePowerHud() {
   powerButton.setAttribute('aria-label', powerButtonLabel);
 
   btnPass.hidden = !gameState.running;
-  btnPass.textContent = curveArmed ? 'Passe curvo (F)' : visionActive ? 'Passe teleguiado (F)' : 'Passe (F)';
+  const visionLongPassMode = gameMode === '2v2' || gameMode === 'training';
+  btnPass.textContent = curveArmed ? 'Passe curvo (F)' : visionActive && visionLongPassMode ? 'Passe da Visão (F)' : visionActive ? 'Passe teleguiado (F)' : 'Passe (F)';
   btnPass.title = curveArmed
     ? 'Passe curvo para o companheiro mais próximo (F)'
-    : visionActive
-      ? 'Passe teleguiado para o companheiro mais próximo (F)'
+    : visionActive && visionLongPassMode
+      ? 'Mire no aliado e pressione F; a linha rosa mostra o passe longo curvo'
+      : visionActive
+        ? 'Passe teleguiado para o companheiro mais próximo (F)'
       : 'Passe para o companheiro mais próximo (F)';
 
   const effectActive = player1.powerEffectTimer > 0 || snakeActive;
