@@ -223,7 +223,8 @@ class Player {
       const dangerDist = Math.max(195, CONFIG.pitch.width * 0.25);
       const inDangerZone = isHomeTeam ? this.x > CONFIG.pitch.right - dangerDist : this.x < CONFIG.pitch.left + dangerDist;
       const isSniperShot = this.powerEffect === 'sniper' && !isPass && inOffensiveZone;
-      const kickPace = typeof getModePaceScale === 'function' ? getModePaceScale().ball : 1;
+      const pace = typeof getModePaceScale === 'function' ? getModePaceScale() : { player: 1, ball: 1, kickPower: 1 };
+      const kickPace = (pace.kickPower || pace.ball || 1);
       const kickMultiplier = this.nextKickPower || 1;
       let power = CONFIG.physics.kickPower * kickPace * kickMultiplier * (isPass ? 0.9 : 1);
 

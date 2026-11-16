@@ -458,6 +458,12 @@ function applyPower(id, actor) {
   ) return false;
 
   if (id === 'snakeTackle') {
+    const isHome = !!(actor.isHuman || actor.isTeammate);
+    const inOwnDefensiveHalf = isHome ? actor.x <= CONFIG.pitch.centerX : actor.x >= CONFIG.pitch.centerX;
+    if (!inOwnDefensiveHalf) {
+      if (actor.isHuman) showPowerFeedback('Bote da Serpente só pode ser usado no seu campo de defesa!', true);
+      return false;
+    }
     return startSnakeTackle(actor);
   }
 
@@ -669,14 +675,22 @@ function applyPower(id, actor) {
   return true;
 }
 
-const BOT_FIXED_POWER_POOL = ['cannon', 'sprint', 'phantom', 'vision', 'curve', 'snakeTackle', 'control', 'eagle', 'sniper', 'shadow', 'ego'];
+const BOT_SKILLS_BY_POSITION = {
+  ATA: ['cannon', 'sniper', 'curve', 'ego', 'phantom'],
+  ALA: ['sprint', 'phantom', 'curve', 'vision'],
+  MEI: ['vision', 'control', 'curve', 'eagle'],
+  ZAG: ['snakeTackle', 'shadow', 'control', 'eagle'],
+  GOL: ['snakeTackle', 'shadow', 'control', 'eagle']
+};
 
 function assignFixedBotPowers(bots) {
-  const pool = BOT_FIXED_POWER_POOL.filter(id => ITEMS.powers.some(p => p.id === id));
   const list = Array.isArray(bots) ? bots : [];
   list.forEach((bot, idx) => {
     if (!bot || bot.isHuman) return;
-    bot.aiPowerId = pool[Math.floor(Math.random() * pool.length)] || pool[idx % pool.length] || 'sprint';
+    const pos = (typeof playerPosition === 'function' ? playerPosition(bot) : bot.assignedPosition) || 'ATA';
+    const rawPool = BOT_SKILLS_BY_POSITION[pos] || BOT_SKILLS_BY_POSITION.ATA;
+    const pool = rawPool.filter(id => ITEMS.powers.some(p => p.id === id));
+    bot.aiPowerId = pool[Math.floor(Math.random() * pool.length)] || rawPool[0] || 'cannon';
     bot.aiPowerThink = 1.6 + Math.random() * 1.8;
   });
 }
@@ -717,6 +731,9 @@ function updatePowerBot(dt, actor = player2) {
   } else if (id === 'control') {
     if (controlled || distToBall > actor.radius + ball.radius + 60) return;
   } else if (id === 'snakeTackle') {
+    // Bote da Serpente estritamente defensivo: só pode ser usado no próprio campo de defesa
+    const inDefHalf = isHome ? actor.x <= p.centerX : actor.x >= p.centerX;
+    if (!inDefHalf) return;
     if (typeof canUseSnakeTackle !== 'function' || !canUseSnakeTackle(actor).ok) return;
   } else if (id === 'shadow') {
     // WEB estritamente defensiva: sem a bola e apenas no campo defensivo do próprio bot

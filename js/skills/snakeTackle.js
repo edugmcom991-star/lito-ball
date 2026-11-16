@@ -120,6 +120,13 @@ function canUseSnakeTackle(actor) {
     return { ok: false, reason: 'Modo inválido para o Bote da Serpente' };
   }
 
+  // Regra por Lado do Campo (Skill estritamente defensiva)
+  const isHome = !!(actor.isHuman || actor.isTeammate);
+  const inOwnDefensiveHalf = isHome ? actor.x <= CONFIG.pitch.centerX : actor.x >= CONFIG.pitch.centerX;
+  if (!inOwnDefensiveHalf) {
+    return { ok: false, reason: 'Bote da Serpente só pode ser usado no seu campo de defesa!' };
+  }
+
   // Evita ativar se o próprio jogador já está conduzindo a bola isolado sem rival disputando
   const opponents = getSnakeOpponents(actor);
   const anyOppNearBall = opponents.some(opp => Math.hypot(opp.x - ball.x, opp.y - ball.y) <= opp.radius + ball.radius + 54) ||

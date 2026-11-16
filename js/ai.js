@@ -337,17 +337,56 @@ function assignTeamRoles(teamKey, teamActors, opponents, attackDir, predicted) {
   let anchorDef = null;
   let fieldActors = teamActors;
   if (teamActors.length >= 3) {
-    const candidates = teamActors.filter(a => !a.isHuman);
-    candidates.sort((a, b) => (a.aiRoleSlot || 0) - (b.aiRoleSlot || 0));
-    anchorDef = candidates[candidates.length - 1] || null;
-    if (anchorDef) {
-      // Caso o goleiro-linha seja claramente o mais próximo da bola na pequena área, vira CARRIER se controlar
-      if (isBallControlledBy(anchorDef)) {
-        memory.roles.set(anchorDef, AI_ROLES.CARRIER);
+    if (teamKey === 'home') {
+      const userPos = (typeof playerConfig !== 'undefined' && playerConfig.position) ? playerConfig.position : 'ATA';
+      const humanIsDef = (userPos === 'ZAG' || userPos === 'GOL');
+      const humanActor = teamActors.find(a => a.isHuman);
+      const p = CONFIG.pitch;
+      const ownGoalX = attackDir > 0 ? p.left : p.right;
+      const humanCovering = humanActor &&
+        Math.abs(humanActor.x - ownGoalX) < p.penaltyWidth * 1.85 &&
+        Math.abs(humanActor.y - p.centerY) < (p.bottom - p.top) * 0.44;
+
+      if (humanIsDef && humanCovering) {
+        // Jogador humano está ocupando e protegendo a meta; bots aliados avançam para apoiar o ataque!
+        anchorDef = null;
+        fieldActors = teamActors;
       } else {
-        memory.roles.set(anchorDef, AI_ROLES.GK_COVER);
+        const candidates = teamActors.filter(a => !a.isHuman);
+        candidates.sort((a, b) => {
+          const aDef = (a.assignedPosition === 'GOL' ? 2 : a.assignedPosition === 'ZAG' ? 1 : 0);
+          const bDef = (b.assignedPosition === 'GOL' ? 2 : b.assignedPosition === 'ZAG' ? 1 : 0);
+          if (aDef !== bDef) return bDef - aDef;
+          return (b.aiRoleSlot || 0) - (a.aiRoleSlot || 0);
+        });
+        anchorDef = candidates[0] || null;
+        if (anchorDef) {
+          if (isBallControlledBy(anchorDef)) {
+            memory.roles.set(anchorDef, AI_ROLES.CARRIER);
+          } else {
+            memory.roles.set(anchorDef, AI_ROLES.GK_COVER);
+          }
+          fieldActors = teamActors.filter(a => a !== anchorDef);
+        }
       }
-      fieldActors = teamActors.filter(a => a !== anchorDef);
+    } else {
+      // Time adversário (away)
+      const candidates = teamActors.filter(a => !a.isHuman);
+      candidates.sort((a, b) => {
+        const aDef = (a.assignedPosition === 'GOL' ? 2 : a.assignedPosition === 'ZAG' ? 1 : 0);
+        const bDef = (b.assignedPosition === 'GOL' ? 2 : b.assignedPosition === 'ZAG' ? 1 : 0);
+        if (aDef !== bDef) return bDef - aDef;
+        return (b.aiRoleSlot || 0) - (a.aiRoleSlot || 0);
+      });
+      anchorDef = candidates[0] || null;
+      if (anchorDef) {
+        if (isBallControlledBy(anchorDef)) {
+          memory.roles.set(anchorDef, AI_ROLES.CARRIER);
+        } else {
+          memory.roles.set(anchorDef, AI_ROLES.GK_COVER);
+        }
+        fieldActors = teamActors.filter(a => a !== anchorDef);
+      }
     }
   }
 
@@ -467,7 +506,7 @@ function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, pr
   }
 
   if (role === AI_ROLES.GK_COVER) {
-    // Goleiro-linha avançado com reação humana: joga à frente da pequena área, dando combate e deixando espaço atrás/nos cantos
+    // Goleiro-linha bem mais adiantado (3v3, 4v4 e 5v5): joga na entrada da grande área e dá combate ao portador
     if (typeof actor.gkAimY !== 'number') actor.gkAimY = p.centerY;
     if (actor.gkReactCooldown > 0) {
       actor.gkReactCooldown = Math.max(0, actor.gkReactCooldown - CONFIG.physics.fixedDelta);
@@ -482,31 +521,32 @@ function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, pr
     const immediateY = ball.y + ball.vy * 1.5;
     const threatDist = Math.abs(immediateX - ownGoalX);
 
-    // Atuação avançada entre a linha da grande área e o setor defensivo intermediário
-    const sweeperMin = Math.max(p.goalAreaWidth * 1.45, p.penaltyWidth * 0.68);
-    const sweeperMax = Math.max(sweeperMin + 60, p.width * 0.28);
-    const guardOffset = Math.max(sweeperMin, Math.min(sweeperMax, threatDist * 0.34));
+    // Atuação bem mais adiantada: joga próximo à linha/entrada da grande área (penaltyWidth)
+    const sweeperMin = Math.max(p.goalAreaWidth * 1.70, p.penaltyWidth * 0.98);
+    const sweeperMax = Math.max(sweeperMin + 70, p.width * 0.32);
+    const guardOffset = Math.max(sweeperMin, Math.min(sweeperMax, threatDist * 0.40));
     const gkX = ownGoalX + attackDir * guardOffset;
-    const targetGoalY = Math.max(g.topY + 22, Math.min(g.bottomY - 22, p.centerY + (immediateY - p.centerY) * 0.54));
-    const smoothRate = actor.gkReactCooldown > 0 ? 0.036 : 0.088;
+    const targetGoalY = Math.max(g.topY + 18, Math.min(g.bottomY - 18, p.centerY + (immediateY - p.centerY) * 0.52));
+    const smoothRate = actor.gkReactCooldown > 0 ? 0.042 : 0.095;
     actor.gkAimY += (targetGoalY - actor.gkAimY) * smoothRate;
 
-    const oppCarrierNearBox = oppCarrier && Math.abs(oppCarrier.x - ownGoalX) < p.penaltyWidth * 1.45;
-    const looseBallNearBox = !oppCarrier && threatDist < p.penaltyWidth * 1.25 && Math.hypot(ball.vx, ball.vy) < 4.2;
+    // Combate agressivo adiantado: quando o rival com bola ou a bola solta se aproximam da grande área
+    const oppCarrierNearBox = oppCarrier && Math.abs(oppCarrier.x - ownGoalX) < p.penaltyWidth * 1.70;
+    const looseBallNearBox = !oppCarrier && threatDist < p.penaltyWidth * 1.45 && Math.hypot(ball.vx, ball.vy) < 5.2;
 
     if (oppCarrierNearBox || looseBallNearBox) {
-      // Sai da boca do gol para dar combate ao portador/bola, abrindo espaço atrás e nos cantos para dribles/tabelas
+      // Sai da grande área para dar combate ao portador/bola, abrindo espaço atrás e nos cantos
       const challengeTarget = oppCarrierNearBox ? oppCarrier : { x: immediateX, y: immediateY };
       const wrongSide = attackDir < 0
         ? actor.x < challengeTarget.x - 8
         : actor.x > challengeTarget.x + 8;
       const rushTarget = wrongSide
         ? getAttackApproachPoint(actor, targetGoalX, p.centerY, challengeTarget)
-        : { x: challengeTarget.x - attackDir * 12, y: challengeTarget.y };
-      const rushSpeed = actor.gkReactCooldown > 0 ? 0.58 : 0.78;
+        : { x: challengeTarget.x - attackDir * 14, y: challengeTarget.y };
+      const rushSpeed = actor.gkReactCooldown > 0 ? 0.76 : 0.94;
       driveBotTo(actor, rushTarget.x, rushTarget.y, rushSpeed, false, teammates);
     } else {
-      const gkSpeed = actor.gkReactCooldown > 0 ? 0.56 : 0.75;
+      const gkSpeed = actor.gkReactCooldown > 0 ? 0.68 : 0.85;
       driveBotTo(actor, gkX, actor.gkAimY, gkSpeed, true, teammates);
     }
 

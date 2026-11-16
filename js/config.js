@@ -476,8 +476,8 @@ const PITCH_LAYOUTS = {
 
 function getModePaceScale(mode) {
   const m = mode || (typeof gameMode === 'string' ? gameMode : 'match');
-  if (m === '5v5') return { player: 0.82, ball: 0.84 };
-  if (m === '4v4') return { player: 0.88, ball: 0.90 };
-  if (m === '3v3') return { player: 0.95, ball: 0.96 };
-  return { player: 1.0, ball: 1.0 };
+  if (m === '5v5') return { player: 0.82, ball: 1.16, kickPower: 1.22 };
+  if (m === '4v4') return { player: 0.88, ball: 1.12, kickPower: 1.18 };
+  if (m === '3v3') return { player: 0.95, ball: 1.08, kickPower: 1.12 };
+  return { player: 1.0, ball: 1.0, kickPower: 1.0 };
 }

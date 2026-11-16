@@ -1024,6 +1024,8 @@ function renderOptions() {
       playerConfig.position = radio.value;
       profile.profileConfigured = true;
       persistProfile();
+      if (typeof assignMatchTacticalRoles === 'function') assignMatchTacticalRoles();
+      if (typeof resetPositions === 'function') resetPositions();
       container.querySelectorAll('.pos-pill-option').forEach(pill => {
         pill.classList.toggle('active', pill.querySelector('input')?.checked);
       });

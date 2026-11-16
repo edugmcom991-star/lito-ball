@@ -562,16 +562,13 @@
 
         <!-- Botão Único Principal de Jogar -->
         <div class="play-cta-wrap">
-          <button id="open-play-setup-btn" type="button" class="primary-btn play-hero-btn cyber-btn">
+          <button id="open-play-setup-btn" type="button" class="play-hero-btn" aria-label="Jogar - Escolher Modo e Iniciar Partida">
             <span class="play-hero-content">
-              <span class="mode-icon-badge" aria-hidden="true">
-                <svg class="svg-icon" width="28" height="28"><use href="#icon-play"></use></svg>
+              <span class="play-hero-icon" aria-hidden="true">
+                <svg class="svg-icon" width="26" height="26" viewBox="0 0 24 24"><use href="#icon-play"></use></svg>
               </span>
-              <span class="play-hero-text">
-                <span class="play-hero-title">JOGAR</span>
-                <span class="play-hero-sub">TREINO LIVRE &bull; 1v1 &bull; 2v2 &bull; 3v3 &bull; 4v4 &bull; 5v5 &amp; ARENA</span>
-              </span>
-              <span class="cyber-chevrons" aria-hidden="true">&raquo;</span>
+              <span class="play-hero-title">JOGAR</span>
+              <span class="play-hero-chevrons" aria-hidden="true">&raquo;</span>
             </span>
           </button>
         </div>
@@ -711,49 +708,67 @@
           <label class="setup-mode-card">
             <input type="radio" name="setup-game-mode" value="training" />
             <span class="setup-mode-body">
-              <span class="mode-icon-badge mode-icon-emerald" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-training"></use></svg></span>
-              <strong>Treino Livre</strong>
-              <small>Sem placar · pratique chutes</small>
+              <span class="setup-mode-header">
+                <span class="mode-icon-badge mode-icon-emerald" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-training"></use></svg></span>
+                <span class="setup-mode-chip">SOLO</span>
+              </span>
+              <strong class="setup-mode-name">Treino Livre</strong>
+              <small class="setup-mode-desc">Sem placar · pratique chutes e dribles</small>
             </span>
           </label>
           <label class="setup-mode-card">
             <input type="radio" name="setup-game-mode" value="match" checked autofocus />
             <span class="setup-mode-body">
-              <span class="mode-icon-badge" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duel-1v1"></use></svg></span>
-              <strong>1v1 Clássico</strong>
-              <small>Duelo direto · 3 min ou 5 gols</small>
+              <span class="setup-mode-header">
+                <span class="mode-icon-badge mode-icon-amber" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duel-1v1"></use></svg></span>
+                <span class="setup-mode-chip">1v1</span>
+              </span>
+              <strong class="setup-mode-name">1v1 Clássico</strong>
+              <small class="setup-mode-desc">Duelo direto · 3 min ou 5 gols</small>
             </span>
           </label>
           <label class="setup-mode-card">
             <input type="radio" name="setup-game-mode" value="2v2" />
             <span class="setup-mode-body">
-              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
-              <strong>2v2 Duplas</strong>
-              <small>Arena ampla · tabelas e passes</small>
+              <span class="setup-mode-header">
+                <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+                <span class="setup-mode-chip">2v2</span>
+              </span>
+              <strong class="setup-mode-name">2v2 Duplas</strong>
+              <small class="setup-mode-desc">Arena ampla · tabelas e passes</small>
             </span>
           </label>
           <label class="setup-mode-card">
             <input type="radio" name="setup-game-mode" value="3v3" />
             <span class="setup-mode-body">
-              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
-              <strong>3v3 Trios</strong>
-              <small>Campo expandido · fixo e alas</small>
+              <span class="setup-mode-header">
+                <span class="mode-icon-badge mode-icon-violet" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+                <span class="setup-mode-chip">3v3</span>
+              </span>
+              <strong class="setup-mode-name">3v3 Trios</strong>
+              <small class="setup-mode-desc">Campo expandido · fixo e alas</small>
             </span>
           </label>
           <label class="setup-mode-card">
             <input type="radio" name="setup-game-mode" value="4v4" />
             <span class="setup-mode-body">
-              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
-              <strong>4v4 Tático</strong>
-              <small>Formação com pivô, alas e fixo</small>
+              <span class="setup-mode-header">
+                <span class="mode-icon-badge mode-icon-rose" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+                <span class="setup-mode-chip">4v4</span>
+              </span>
+              <strong class="setup-mode-name">4v4 Tático</strong>
+              <small class="setup-mode-desc">Formação com pivô, alas e fixo</small>
             </span>
           </label>
           <label class="setup-mode-card">
             <input type="radio" name="setup-game-mode" value="5v5" />
             <span class="setup-mode-body">
-              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
-              <strong>5v5 Completo</strong>
-              <small>Arena máxima · goleiro-linha ativo</small>
+              <span class="setup-mode-header">
+                <span class="mode-icon-badge mode-icon-gold" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+                <span class="setup-mode-chip">5v5</span>
+              </span>
+              <strong class="setup-mode-name">5v5 Completo</strong>
+              <small class="setup-mode-desc">Arena máxima · goleiro-linha ativo</small>
             </span>
           </label>
         </div>

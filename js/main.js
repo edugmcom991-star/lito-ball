@@ -138,6 +138,7 @@ const posts = [
 
 function setPitchLayout(mode = 'match') {
   const normalized = normalizeGameMode(mode);
+  gameMode = normalized;
   const layout = PITCH_LAYOUTS[normalized] || PITCH_LAYOUTS.match;
   const p = CONFIG.pitch;
   const g = CONFIG.goals;
@@ -150,18 +151,19 @@ function setPitchLayout(mode = 'match') {
   canvas.style.setProperty('--canvas-h', String(layout.canvasHeight));
 
   const size = getTeamSize(normalized);
+  if (typeof assignMatchTacticalRoles === 'function') assignMatchTacticalRoles(size);
   const playerRadius = size >= 5 ? 18 : size === 4 ? 19 : size === 3 ? 21 : 22;
   const gkSlotRadius = size >= 5 ? 16.5 : size === 4 ? 17.5 : size === 3 ? 18.5 : playerRadius;
   for (let i = 0; i < homePool.length; i++) {
     const actor = homePool[i];
     if (actor === homeMate && size === 1) actor.radius = 20;
-    else if (size >= 3 && i === size - 1) actor.radius = gkSlotRadius;
+    else if (size >= 3 && actor.assignedPosition === 'GOL') actor.radius = gkSlotRadius;
     else actor.radius = playerRadius;
   }
   for (let i = 0; i < awayPool.length; i++) {
     const actor = awayPool[i];
     if (actor === awayMate && size === 1) actor.radius = 20;
-    else if (size >= 3 && i === size - 1) actor.radius = gkSlotRadius;
+    else if (size >= 3 && actor.assignedPosition === 'GOL') actor.radius = gkSlotRadius;
     else actor.radius = playerRadius;
   }
 
@@ -327,9 +329,10 @@ const MatchRating = {
 // Inicializa o sistema de notas
 MatchRating.reset();
 
-/* Posição tática do jogador (para o FUT Card) */
+/* Posição tática do jogador (para o FUT Card e HUD) */
 function playerPosition(actor) {
   if (actor === player1) return (playerConfig && playerConfig.position) ? playerConfig.position : 'ATA';
+  if (actor && actor.assignedPosition) return actor.assignedPosition;
   const slot = actor && Number.isInteger(actor.aiRoleSlot) ? actor.aiRoleSlot : 0;
   const teamPositions = ['ATA', 'MEI', 'ALA', 'ZAG', 'GOL'];
   if (actor && (actor.isHuman || actor.isTeammate)) {
@@ -341,13 +344,19 @@ function playerPosition(actor) {
 /* Nome do jogador para o card */
 function playerDisplayName(actor) {
   if (actor === player1) return (playerConfig?.name || 'LITO').toUpperCase().slice(0, 12);
-  const slot = actor && Number.isInteger(actor.aiRoleSlot) ? actor.aiRoleSlot : 0;
+  const pos = playerPosition(actor);
   if (actor && actor.isTeammate) {
-    const mateNames = ['PARCEIRO', 'ALA AZUL', 'ZAGUEIRO', 'GOLEIRO'];
-    return mateNames[Math.max(0, slot - 1)] || `ALIADO #${slot + 1}`;
+    const posNames = {
+      ATA: 'ATACANTE AZUL',
+      ALA: 'ALA AZUL',
+      MEI: 'MEIA AZUL',
+      ZAG: 'ZAGUEIRO AZUL',
+      GOL: 'GOLEIRO AZUL'
+    };
+    return posNames[pos] || `ALIADO · ${pos}`;
   }
-  if (actor === player2) return 'RIVAL #1';
-  return `RIVAL #${slot + 1}`;
+  if (actor === player2 && !isTeamMode()) return 'RIVAL #1';
+  return `RIVAL · ${pos}`;
 }
 
 function newTwoVtwoStats() {
@@ -859,13 +868,107 @@ function endGame(reason) {
   syncModalInertState();
 }
 
-const FORMATION_SLOTS = {
-  1: [[0.37, 0]],
-  2: [[0.60, 0], [0.86, 0.29]],
-  3: [[0.78, 0], [0.52, -0.34], [0.30, 0.24]],
-  4: [[0.80, 0], [0.56, -0.36], [0.56, 0.36], [0.28, 0]],
-  5: [[0.82, -0.14], [0.60, 0.34], [0.56, -0.40], [0.34, 0.22], [0.22, 0]]
+const DEFAULT_FORMATION_ROLES = {
+  1: ['ATA'],
+  2: ['ATA', 'ZAG'],
+  3: ['ATA', 'ALA', 'GOL'],
+  4: ['ATA', 'ALA', 'MEI', 'GOL'],
+  5: ['ATA', 'MEI', 'ALA', 'ZAG', 'GOL']
 };
+
+const POSITION_FORMATION_COORDS = {
+  1: {
+    ATA: [0.42, 0],
+    ALA: [0.40, -0.22],
+    MEI: [0.38, 0],
+    ZAG: [0.34, 0.18],
+    GOL: [0.28, 0]
+  },
+  2: {
+    ATA: [0.84, 0],
+    ALA: [0.72, -0.28],
+    MEI: [0.66, 0.22],
+    ZAG: [0.46, 0.22],
+    GOL: [0.30, 0]
+  },
+  3: {
+    ATA: [0.78, 0],
+    ALA: [0.54, -0.34],
+    MEI: [0.54, 0.34],
+    ZAG: [0.36, 0.22],
+    GOL: [0.26, 0]
+  },
+  4: {
+    ATA: [0.80, 0],
+    ALA: [0.58, -0.36],
+    MEI: [0.58, 0.36],
+    ZAG: [0.36, 0.22],
+    GOL: [0.26, 0]
+  },
+  5: {
+    ATA: [0.82, -0.14],
+    ALA: [0.58, -0.40],
+    MEI: [0.60, 0.34],
+    ZAG: [0.36, 0.22],
+    GOL: [0.22, 0]
+  }
+};
+
+const FORMATION_SLOTS = {
+  1: [[0.42, 0]],
+  2: [[0.84, 0], [0.46, 0.22]],
+  3: [[0.78, 0], [0.54, -0.34], [0.26, 0]],
+  4: [[0.80, 0], [0.58, -0.36], [0.58, 0.36], [0.26, 0]],
+  5: [[0.82, -0.14], [0.58, -0.40], [0.60, 0.34], [0.36, 0.22], [0.22, 0]]
+};
+
+function assignMatchTacticalRoles(size = getTeamSize(gameMode)) {
+  const userPos = (playerConfig && playerConfig.position) ? playerConfig.position : 'ATA';
+  player1.assignedPosition = userPos;
+
+  // 1. Time da Casa: adapta bots aliados às posições restantes
+  const baseRoles = [...(DEFAULT_FORMATION_ROLES[size] || DEFAULT_FORMATION_ROLES[1])];
+  if (size === 1) {
+    player1.assignedPosition = userPos;
+    player2.assignedPosition = (userPos === 'ATA') ? 'ZAG' : 'ATA';
+  } else {
+    let matchIdx = baseRoles.indexOf(userPos);
+    if (matchIdx === -1) {
+      if (userPos === 'ZAG' && baseRoles.includes('GOL')) matchIdx = baseRoles.indexOf('GOL');
+      else if (userPos === 'GOL' && baseRoles.includes('ZAG')) matchIdx = baseRoles.indexOf('ZAG');
+      else if (userPos === 'ALA' && baseRoles.includes('MEI')) matchIdx = baseRoles.indexOf('MEI');
+      else if (userPos === 'MEI' && baseRoles.includes('ALA')) matchIdx = baseRoles.indexOf('ALA');
+      else matchIdx = baseRoles.length - 1;
+    }
+    baseRoles.splice(matchIdx, 1);
+
+    for (let i = 1; i < size; i++) {
+      const bot = homePool[i];
+      if (bot) {
+        bot.assignedPosition = baseRoles[i - 1] || 'MEI';
+      }
+    }
+
+    // 2. Time Visitante (Rival): formação completa e equilibrada
+    const awayRoles = DEFAULT_FORMATION_ROLES[size] || DEFAULT_FORMATION_ROLES[1];
+    for (let i = 0; i < size; i++) {
+      const bot = awayPool[i];
+      if (bot) {
+        bot.assignedPosition = awayRoles[i] || (i === size - 1 ? 'GOL' : 'ATA');
+      }
+    }
+  }
+
+  // Ajusta o raio do goleiro (quem for GOL ganha raio de goleiro nos modos >= 3)
+  const playerRadius = size >= 5 ? 18 : size === 4 ? 19 : size === 3 ? 21 : 22;
+  const gkSlotRadius = size >= 5 ? 16.5 : size === 4 ? 17.5 : size === 3 ? 18.5 : playerRadius;
+  for (let i = 0; i < size; i++) {
+    const h = homePool[i];
+    if (h) h.radius = (size >= 3 && h.assignedPosition === 'GOL') ? gkSlotRadius : playerRadius;
+    const a = awayPool[i];
+    if (a) a.radius = (size >= 3 && a.assignedPosition === 'GOL') ? gkSlotRadius : playerRadius;
+  }
+}
 
 function resetPositions() {
   snakeTackles.length = 0;
@@ -873,7 +976,7 @@ function resetPositions() {
   if (typeof clearTwoOneState === 'function') clearTwoOneState();
   if (typeof clearSpeedsterEffects === 'function') clearSpeedsterEffects();
   if (typeof clearWebTraps === 'function') clearWebTraps();
-  clearPistolAnimations();
+  if (typeof clearPistolAnimations === 'function') clearPistolAnimations();
   const p = CONFIG.pitch;
 
   // Estaciona fora de campo quem não participa do modo atual
@@ -894,13 +997,25 @@ function resetPositions() {
     pinTrainingDummy();
   } else {
     const size = getTeamSize(gameMode);
-    const coords = FORMATION_SLOTS[size] || FORMATION_SLOTS[1];
+    assignMatchTacticalRoles(size);
+    const coordsMap = POSITION_FORMATION_COORDS[size] || POSITION_FORMATION_COORDS[1];
     const halfW = p.width / 2;
     const halfH = p.height / 2;
+
     for (let i = 0; i < size; i++) {
-      const [u, v] = coords[i] || [0.35, 0];
-      homePool[i].reset(p.left + u * halfW, p.centerY + v * halfH);
-      awayPool[i].reset(p.right - u * halfW, p.centerY - v * halfH);
+      const hActor = homePool[i];
+      const hPos = hActor.assignedPosition || (i === 0 ? playerConfig.position : 'ATA');
+      const [hu, hv] = coordsMap[hPos] || coordsMap.ATA || [0.5, 0];
+      hActor.reset(p.left + hu * halfW, p.centerY + hv * halfH);
+      hActor.facingX = 1;
+      hActor.facingY = 0;
+
+      const aActor = awayPool[i];
+      const aPos = aActor.assignedPosition || 'ATA';
+      const [au, av] = coordsMap[aPos] || coordsMap.ATA || [0.5, 0];
+      aActor.reset(p.right - au * halfW, p.centerY - av * halfH);
+      aActor.facingX = -1;
+      aActor.facingY = 0;
     }
   }
 
@@ -1201,6 +1316,9 @@ function startFreshMatch(mode = 'match') {
     bot.aiPowerId = null;
     bot.nextKickPower = 1;
     bot.nextKickReach = 1;
+  }
+  if (typeof assignMatchTacticalRoles === 'function') {
+    assignMatchTacticalRoles(getTeamSize(gameMode));
   }
   if (typeof assignFixedBotPowers === 'function') {
     assignFixedBotPowers([...getActiveHomePlayers().filter(p => !p.isHuman), ...getActiveAwayPlayers()]);
