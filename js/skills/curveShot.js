@@ -31,13 +31,17 @@ function updateCurveMouseAim(clientX, clientY) {
 }
 
 function getCurveTeams(actor) {
-  const isHome = actor.isHuman || actor.isTeammate;
-  const opponents = isHome
-    ? (gameMode === '2v2' ? [player2, awayMate] : [player2])
-    : (gameMode === '2v2' ? [player1, homeMate] : [player1]);
-  const teammates = isHome
-    ? (gameMode === '2v2' ? [player1, homeMate] : [player1])
-    : (gameMode === '2v2' ? [player2, awayMate] : [player2]);
+  const isHome = !!(actor.isHuman || actor.isTeammate);
+  const opponents = typeof getOpponentsOf === 'function'
+    ? getOpponentsOf(actor)
+    : (isHome
+        ? (gameMode === '2v2' ? [player2, awayMate] : [player2])
+        : (gameMode === '2v2' ? [player1, homeMate] : [player1]));
+  const teammates = typeof getTeammatesOf === 'function'
+    ? getTeammatesOf(actor)
+    : (isHome
+        ? (gameMode === '2v2' ? [player1, homeMate] : [player1])
+        : (gameMode === '2v2' ? [player2, awayMate] : [player2]));
   return { isHome, opponents, teammates };
 }
 

@@ -38,8 +38,13 @@ class Player {
     this.visionRunDirectionY = 0;
     this.tackleStaggerTimer = 0;
     this.controlPulseTimer = 0;
-    this.aiPowerThink = 6 + Math.random() * 3;
+    this.webSnareTimer = 0;
+    this.aiPowerThink = 2.2 + Math.random() * 1.8;
     this.aiPowerId = null;
+    this.aiRoleSlot = 0;
+    this.gkAimY = y;
+    this.gkReactCooldown = 0;
+    this.gkLastBallVy = 0;
 
     // Controle de Chute
     this.kickCooldownTimer = 0;
@@ -68,8 +73,12 @@ class Player {
     this.visionRunTimer = 0;
     this.tackleStaggerTimer = 0;
     this.controlPulseTimer = 0;
+    this.webSnareTimer = 0;
     this.nextKickPower = 1;
     this.nextKickReach = 1;
+    this.gkAimY = y;
+    this.gkReactCooldown = 0;
+    this.gkLastBallVy = 0;
   }
 
   update(dt) {
@@ -90,6 +99,7 @@ class Player {
       }
     }
     if (this.controlPulseTimer > 0) this.controlPulseTimer = Math.max(0, this.controlPulseTimer - dt);
+    if (this.webSnareTimer > 0) this.webSnareTimer = Math.max(0, this.webSnareTimer - dt);
     if (this.dashTimer > 0) this.dashTimer = Math.max(0, this.dashTimer - dt);
     if (this.snakeLungeTimer > 0) this.snakeLungeTimer = Math.max(0, this.snakeLungeTimer - dt);
     if (this.twoOneRunTimer > 0) this.twoOneRunTimer = Math.max(0, this.twoOneRunTimer - dt);
@@ -106,17 +116,19 @@ class Player {
     this.vx *= CONFIG.physics.dampingPlayer;
     this.vy *= CONFIG.physics.dampingPlayer;
 
-    // Limite de velocidade máxima do botão
+    // Limite de velocidade máxima do botão (escalado pelo ritmo do modo)
+    const pace = typeof getModePaceScale === 'function' ? getModePaceScale() : { player: 1, ball: 1 };
+    const burstPace = pace.player < 1 ? (0.5 + 0.5 * pace.player) : 1;
     const currentSpeed = Math.hypot(this.vx, this.vy);
     const maxSpeed =
-      this.snakeLungeTimer > 0 ? 9.6 :
-      this.dashTimer > 0 ? 8.8 :
-      this.twoOneRunTimer > 0 ? 7.15 :
-      this.ghostCutTimer > 0 ? 5.3 :
-      CONFIG.physics.playerMaxSpeed * (
+      this.webSnareTimer > 0 ? 0.55 :
+      this.snakeLungeTimer > 0 ? 9.6 * burstPace :
+      this.dashTimer > 0 ? 8.8 * burstPace :
+      this.twoOneRunTimer > 0 ? 7.15 * burstPace :
+      this.ghostCutTimer > 0 ? 5.3 * burstPace :
+      CONFIG.physics.playerMaxSpeed * pace.player * (
         this.powerEffect === 'sprint' ? 1.32 :
         this.powerEffect === 'ego' ? 1.28 :
-        this.powerEffect === 'shadow' ? 1.14 :
         this.powerEffect === 'vision' ? 1.20 : 1
       );
 
@@ -208,10 +220,12 @@ class Player {
       // 2. Velocidade resultante limpa
       const isHomeTeam = this.isHuman || this.isTeammate;
       const inOffensiveZone = isHomeTeam ? this.x > CONFIG.pitch.centerX - 30 : this.x < CONFIG.pitch.centerX + 30;
-      const inDangerZone = isHomeTeam ? this.x > 685 : this.x < 315;
+      const dangerDist = Math.max(195, CONFIG.pitch.width * 0.25);
+      const inDangerZone = isHomeTeam ? this.x > CONFIG.pitch.right - dangerDist : this.x < CONFIG.pitch.left + dangerDist;
       const isSniperShot = this.powerEffect === 'sniper' && !isPass && inOffensiveZone;
+      const kickPace = typeof getModePaceScale === 'function' ? getModePaceScale().ball : 1;
       const kickMultiplier = this.nextKickPower || 1;
-      let power = CONFIG.physics.kickPower * kickMultiplier * (isPass ? 0.9 : 1);
+      let power = CONFIG.physics.kickPower * kickPace * kickMultiplier * (isPass ? 0.9 : 1);
 
       if (this.powerEffect === 'ego') {
         power *= 1.36;
@@ -246,7 +260,8 @@ class Player {
       }
       if (kickMultiplier > 1.5 || isSniperShot) {
         ball.powerShotTimer = Math.max(ball.powerShotTimer, 0.9);
-        Sound.playCannon();
+        if (typeof Sound.playCannon === 'function') Sound.playCannon();
+        else if (typeof Sound.playCannonSynth === 'function') Sound.playCannonSynth();
       }
       if (curvedKick) {
         const requestedSide = this.isHuman
@@ -440,6 +455,10 @@ class Player {
       renderCtx.setLineDash([]);
     }
 
+    if (typeof drawPlayerWebSnareOverlay === 'function') {
+      drawPlayerWebSnareOverlay(renderCtx, this);
+    }
+
     renderCtx.restore();
   }
 }
@@ -550,12 +569,13 @@ class Ball {
     this.vx *= CONFIG.physics.dampingBall;
     this.vy *= CONFIG.physics.dampingBall;
 
+    const ballPace = typeof getModePaceScale === 'function' ? getModePaceScale().ball : 1;
     const speed = Math.hypot(this.vx, this.vy);
-    const maxSpeed = this.curveTimer > 0
+    const maxSpeed = (this.curveTimer > 0
       ? CONFIG.physics.ballMaxSpeed * 1.48
       : this.powerShotTimer > 0
         ? CONFIG.physics.ballMaxSpeed * 1.4
-        : CONFIG.physics.ballMaxSpeed;
+        : CONFIG.physics.ballMaxSpeed) * ballPace;
     if (speed > maxSpeed) {
       this.vx = (this.vx / speed) * maxSpeed;
       this.vy = (this.vy / speed) * maxSpeed;
@@ -862,9 +882,6 @@ class GoalPost {
 
 // Partículas e trilhas visuais
 const particles = [];
-const lightningTrails = [];
-const pantherPaws = [];
-const pantherSparks = [];
 const phantomShadows = [];
 
 /* ==========================================================================
@@ -981,160 +998,6 @@ function updateAndDrawPhantomShadows(renderCtx) {
     renderCtx.textAlign = 'center';
     renderCtx.textBaseline = 'middle';
     renderCtx.fillText(shadow.number, shadow.x, shadow.y);
-    renderCtx.restore();
-  }
-}
-
-/* ==========================================================================
-   A PANTERA DO CHIGIRI — RASTRO FERAL, GARRAS E SILHUETA
-   ========================================================================== */
-function addLightningTrail(player) {
-  const backX = -player.facingX;
-  const backY = -player.facingY;
-  const sideX = -backY;
-  const sideY = backX;
-
-  // Adiciona feixe incandescente rubi/rosa-choque
-  const points = [];
-  for (let i = 0; i < 7; i++) {
-    const along = i * 11;
-    const zigzag = i === 0 || i === 6 ? 0 : (Math.random() - 0.5) * 16;
-    points.push({
-      x: player.x + backX * (player.radius + along) + sideX * zigzag,
-      y: player.y + backY * (player.radius + along) + sideY * zigzag
-    });
-  }
-  lightningTrails.push({ points, life: 0.28, maxLife: 0.28 });
-
-  // Adiciona marca de garras no gramado
-  if (Math.random() < 0.65) {
-    pantherPaws.push({
-      x: player.x + backX * (player.radius + 12) + (Math.random() - 0.5) * 16,
-      y: player.y + backY * (player.radius + 12) + (Math.random() - 0.5) * 16,
-      angle: Math.atan2(player.facingY, player.facingX),
-      life: 0.45,
-      maxLife: 0.45
-    });
-  }
-
-  // Faíscas elétricas carmesim e fumaça
-  for (let k = 0; k < 3; k++) {
-    pantherSparks.push({
-      x: player.x + backX * player.radius + (Math.random() - 0.5) * 14,
-      y: player.y + backY * player.radius + (Math.random() - 0.5) * 14,
-      vx: (Math.random() - 0.5) * 3 - player.facingX * 2,
-      vy: (Math.random() - 0.5) * 3 - player.facingY * 2,
-      life: 0.35 + Math.random() * 0.2,
-      maxLife: 0.5,
-      color: Math.random() < 0.6 ? '#f43f5e' : Math.random() < 0.5 ? '#fda4af' : '#e11d48',
-      size: 1.8 + Math.random() * 2.5
-    });
-  }
-}
-
-function updateAndDrawLightningTrails(renderCtx) {
-  // 1. Marcas de garras da Pantera no chão
-  for (let i = pantherPaws.length - 1; i >= 0; i--) {
-    const paw = pantherPaws[i];
-    paw.life -= 1 / 60;
-    if (paw.life <= 0) {
-      pantherPaws.splice(i, 1);
-      continue;
-    }
-    const alpha = paw.life / paw.maxLife;
-    renderCtx.save();
-    renderCtx.translate(paw.x, paw.y);
-    renderCtx.rotate(paw.angle);
-    renderCtx.globalAlpha = alpha * 0.85;
-    renderCtx.strokeStyle = '#fda4af';
-    renderCtx.shadowColor = '#e11d48';
-    renderCtx.shadowBlur = 10;
-    renderCtx.lineWidth = 2.2;
-    // 3 marcas de garras rasgando o chão
-    for (let c = -1; c <= 1; c++) {
-      renderCtx.beginPath();
-      renderCtx.moveTo(-8, c * 5);
-      renderCtx.quadraticCurveTo(2, c * 6, 12, c * 4.5);
-      renderCtx.stroke();
-    }
-    renderCtx.restore();
-  }
-
-  // 2. Faíscas elétricas e fumaça rubi
-  for (let i = pantherSparks.length - 1; i >= 0; i--) {
-    const spark = pantherSparks[i];
-    spark.x += spark.vx;
-    spark.y += spark.vy;
-    spark.life -= 1 / 60;
-    if (spark.life <= 0) {
-      pantherSparks.splice(i, 1);
-      continue;
-    }
-    const alpha = spark.life / spark.maxLife;
-    renderCtx.save();
-    renderCtx.globalAlpha = alpha;
-    renderCtx.beginPath();
-    renderCtx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
-    renderCtx.fillStyle = spark.color;
-    renderCtx.shadowColor = '#f43f5e';
-    renderCtx.shadowBlur = 8;
-    renderCtx.fill();
-    renderCtx.restore();
-  }
-
-  // 3. Feixes de velocidade e silhueta veloz da Pantera
-  for (let i = lightningTrails.length - 1; i >= 0; i--) {
-    const trail = lightningTrails[i];
-    trail.life -= 1 / 60;
-    if (trail.life <= 0) {
-      lightningTrails.splice(i, 1);
-      continue;
-    }
-    const alpha = trail.life / trail.maxLife;
-    renderCtx.save();
-    renderCtx.globalAlpha = alpha;
-    renderCtx.lineCap = 'round';
-    renderCtx.lineJoin = 'round';
-
-    // Rastro rubi exterior
-    renderCtx.beginPath();
-    renderCtx.moveTo(trail.points[0].x, trail.points[0].y);
-    for (let p = 1; p < trail.points.length; p++) {
-      renderCtx.lineTo(trail.points[p].x, trail.points[p].y);
-    }
-    renderCtx.strokeStyle = '#f43f5e';
-    renderCtx.lineWidth = 7;
-    renderCtx.shadowColor = '#e11d48';
-    renderCtx.shadowBlur = 18;
-    renderCtx.stroke();
-
-    // Núcleo rosa-choque incandescente
-    renderCtx.strokeStyle = '#fecdd3';
-    renderCtx.lineWidth = 2.4;
-    renderCtx.shadowBlur = 6;
-    renderCtx.stroke();
-
-    // Silhueta felina aerodinâmica da Pantera
-    const head = trail.points[0];
-    const tail = trail.points[trail.points.length - 1];
-    const panAngle = Math.atan2(head.y - tail.y, head.x - tail.x);
-    renderCtx.save();
-    renderCtx.translate((head.x + tail.x) * 0.5, (head.y + tail.y) * 0.5);
-    renderCtx.rotate(panAngle);
-    renderCtx.fillStyle = 'rgba(225, 29, 72, 0.45)';
-    renderCtx.strokeStyle = 'rgba(253, 164, 175, 0.75)';
-    renderCtx.lineWidth = 1.6;
-    renderCtx.beginPath();
-    // Corpo esguio em corrida
-    renderCtx.moveTo(18, 0);
-    renderCtx.quadraticCurveTo(8, -8, -12, -4);
-    renderCtx.lineTo(-20, -1);
-    renderCtx.quadraticCurveTo(-10, 8, 8, 4);
-    renderCtx.closePath();
-    renderCtx.fill();
-    renderCtx.stroke();
-    renderCtx.restore();
-
     renderCtx.restore();
   }
 }

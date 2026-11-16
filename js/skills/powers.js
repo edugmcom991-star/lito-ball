@@ -25,7 +25,8 @@ function phantomStats(actor) {
 function choosePhantomCut(actor) {
   const sideX = -actor.facingY;
   const sideY = actor.facingX;
-  const bot = actor.isHuman ? player2 : player1;
+  const opps = typeof getOpponentsOf === 'function' ? getOpponentsOf(actor) : [actor.isHuman ? player2 : player1];
+  const bot = opps.slice().sort((a, b) => Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y))[0] || player2;
   const score = sign => {
     const x = actor.x + sideX * sign * 64;
     const y = actor.y + sideY * sign * 64;
@@ -128,13 +129,19 @@ function updatePlayerDribbleControl(actor) {
 }
 
 function nearestPassTeammate(actor) {
-  const candidates = [homeMate].filter(teammate => teammate !== actor);
+  const candidates = typeof getTeammatesOf === 'function'
+    ? getTeammatesOf(actor).filter(teammate => teammate && teammate !== actor)
+    : [homeMate].filter(teammate => teammate !== actor);
   return candidates.sort((a, b) => Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y))[0] || null;
 }
 
 function visionPassTargets(actor) {
-  if (gameMode !== '2v2' && gameMode !== 'training') return [];
-  return actor === player1 || actor === homeMate ? [actor === player1 ? homeMate : player1] : [];
+  const inMulti = gameMode === 'training' || ['2v2', '3v3', '4v4', '5v5'].includes(gameMode);
+  if (!inMulti) return [];
+  const mates = typeof getTeammatesOf === 'function'
+    ? getTeammatesOf(actor).filter(m => m && m !== actor)
+    : (actor === player1 || actor === homeMate ? [actor === player1 ? homeMate : player1] : []);
+  return mates;
 }
 
 function getVisionPassTarget(actor) {
@@ -250,14 +257,17 @@ function updateVisionLongPassFlight(dt) {
 
 function stopVisionPassFlightOnInterception() {
   if (!ball.visionPassFlight || ball.visionPassFlight.completed) return;
-  const opponents = [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
+  const opponents = typeof getActiveAwayPlayers === 'function'
+    ? getActiveAwayPlayers()
+    : [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
   if (opponents.some(opponent => Math.hypot(ball.x - opponent.x, ball.y - opponent.y) <= opponent.radius + ball.radius + 1)) {
     ball.visionPassFlight.completed = true;
   }
 }
 
 function drawVisionLongPassPreview(renderCtx) {
-  if ((gameMode !== '2v2' && gameMode !== 'training') || player1.powerEffect !== 'vision' || player1.powerEffectTimer <= 0 || !isBallControlledBy(player1)) return;
+  const hasMates = gameMode === 'training' || ['2v2', '3v3', '4v4', '5v5'].includes(gameMode);
+  if (!hasMates || player1.powerEffect !== 'vision' || player1.powerEffectTimer <= 0 || !isBallControlledBy(player1)) return;
   const target = getVisionPassTarget(player1);
   if (!target) return;
   const from = { x: ball.x, y: ball.y };
@@ -315,8 +325,9 @@ function updateVisionPassAssist(dt) {
   const endY = ball.y + uy * lookAhead;
   const along = (target.x - ball.x) * ux + (target.y - ball.y) * uy;
   if (along < 18 || along > lookAhead || pointSegmentDistance(target.x, target.y, ball.x, ball.y, endX, endY) > 46) return;
-  const bluePass = passer === player1 || passer === homeMate;
-  const blockers = bluePass ? [player2, ...(gameMode === '2v2' ? [awayMate] : [])] : [player1, ...(gameMode === '2v2' ? [homeMate] : [])];
+  const blockers = typeof getOpponentsOf === 'function'
+    ? getOpponentsOf(passer)
+    : ((passer === player1 || passer === homeMate) ? [player2, ...(gameMode === '2v2' ? [awayMate] : [])] : [player1, ...(gameMode === '2v2' ? [homeMate] : [])]);
   const blockRadius = ball.radius + 4;
   if (blockers.some(opponent => pointSegmentDistance(opponent.x, opponent.y, ball.x, ball.y, target.x, target.y) < opponent.radius + blockRadius)) return;
   for (const post of posts) {
@@ -335,6 +346,7 @@ function updateVisionPassAssist(dt) {
 
 function chooseVisionRunDirection(mate) {
   const p = CONFIG.pitch;
+  const opps = typeof getOpponentsOf === 'function' ? getOpponentsOf(mate) : [player2];
   const candidates = [{ x: 1, y: -0.45 }, { x: 1, y: 0.45 }, { x: 0.8, y: -0.75 }, { x: 0.8, y: 0.75 }];
   return candidates.map(dir => {
     const len = Math.hypot(dir.x, dir.y);
@@ -345,7 +357,9 @@ function chooseVisionRunDirection(mate) {
     if (tx < p.left + mate.radius || tx > p.right - mate.radius || ty < p.top + mate.radius || ty > p.bottom - mate.radius) {
       return { dir, score: -Infinity };
     }
-    const space = Math.min(Math.hypot(tx - player2.x, ty - player2.y), Math.hypot(tx - awayMate.x, ty - awayMate.y));
+    const space = opps.length
+      ? Math.min(...opps.map(o => Math.hypot(tx - o.x, ty - o.y)))
+      : 300;
     const playerClear = Math.hypot(tx - player1.x, ty - player1.y);
     if (playerClear < player1.radius + mate.radius + 18) return { dir, score: -Infinity };
     return { dir, score: space + Math.min(playerClear, 120) * 0.08 + nx * 16 };
@@ -358,16 +372,19 @@ function updateTwoVtwoPassProgress(dt) {
     if (!visionPassRoute.timer) visionPassRoute = null;
   }
   if (ball.passExpiry > 0) ball.passExpiry = Math.max(0, ball.passExpiry - dt);
-  if (gameMode !== '2v2' || !twoVtwoStats) {
+  const homePlayers = typeof getActiveHomePlayers === 'function' ? getActiveHomePlayers() : [player1, ...(gameMode === '2v2' ? [homeMate] : [])];
+  const awayPlayers = typeof getActiveAwayPlayers === 'function' ? getActiveAwayPlayers() : [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
+  const isTeamMatch = ['2v2', '3v3', '4v4', '5v5'].includes(gameMode);
+
+  if (!isTeamMatch || !twoVtwoStats) {
     if (ball.visionPassFlight) {
       const target = ball.passTarget;
-      const opponents = [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
       if (target && isBallReceivedBy(target)) {
         ball.visionPassFlight = null;
         ball.passTarget = null;
         ball.passSource = null;
         ball.passExpiry = 0;
-      } else if (opponents.some(isBallControlledBy) || ball.passExpiry <= 0) {
+      } else if (awayPlayers.some(isBallControlledBy) || ball.passExpiry <= 0) {
         ball.visionPassFlight = null;
         ball.passTarget = null;
         ball.passSource = null;
@@ -377,7 +394,7 @@ function updateTwoVtwoPassProgress(dt) {
     return;
   }
   if (!ball.passTarget) {
-    if (isBallControlledBy(player2) || isBallControlledBy(awayMate)) {
+    if (awayPlayers.some(isBallControlledBy)) {
       twoVtwoStats.passStreak = 0;
       twoVtwoStats.goalAssistPending = false;
     }
@@ -387,19 +404,19 @@ function updateTwoVtwoPassProgress(dt) {
   const source = ball.passSource;
   if (isBallReceivedBy(target)) {
     ball.visionPassFlight = null;
-    const teammatePass = (source === player1 && target === homeMate) || (source === homeMate && target === player1);
+    const teammatePass = homePlayers.includes(source) && homePlayers.includes(target) && source !== target;
     if (teammatePass) {
       twoVtwoStats.passStreak++;
       if (twoVtwoStats.passStreak >= 4) twoVtwoStats.completed.passes = true;
-      if (source === homeMate && target === player1) twoVtwoStats.goalAssistPending = true;
+      if (source !== player1 && target === player1) twoVtwoStats.goalAssistPending = true;
     }
-    if (ball.passWasVision && source === player1 && target === homeMate) {
-      const run = chooseVisionRunDirection(homeMate);
-      homeMate.visionRunDirectionX = run.x;
-      homeMate.visionRunDirectionY = run.y;
-      homeMate.visionRunTimer = 0.46;
+    if (ball.passWasVision && source === player1 && target && target !== player1) {
+      const run = chooseVisionRunDirection(target);
+      target.visionRunDirectionX = run.x;
+      target.visionRunDirectionY = run.y;
+      target.visionRunTimer = 0.46;
       const from = { x: player1.x, y: player1.y };
-      const to = { x: homeMate.x, y: homeMate.y };
+      const to = { x: target.x, y: target.y };
       visionPassRoute = { from, to, control: getVisionPassControlPoint(from, to, player1), timer: 1.35, maxTimer: 1.35 };
       showPowerFeedback('Passe encaixado · parceiro ataca o espaço', true, false);
     }
@@ -409,8 +426,8 @@ function updateTwoVtwoPassProgress(dt) {
     ball.passWasVision = false;
     return;
   }
-  const intercepted = isBallControlledBy(player2) || isBallControlledBy(awayMate);
-  const possessionChanged = (isBallControlledBy(player1) || isBallControlledBy(homeMate)) && source !== ball.dribbleLockOwner;
+  const intercepted = awayPlayers.some(isBallControlledBy);
+  const possessionChanged = homePlayers.some(isBallControlledBy) && source !== ball.dribbleLockOwner;
   if (intercepted || ball.passExpiry <= 0 || possessionChanged) {
     ball.visionPassFlight = null;
     twoVtwoStats.passStreak = 0;
@@ -423,6 +440,10 @@ function updateTwoVtwoPassProgress(dt) {
 }
 
 function applyPower(id, actor) {
+  if (actor && actor.webSnareTimer > 0) {
+    if (actor.isHuman) showPowerFeedback('Preso na teia WEB! Aguarde liberar', true, false);
+    return false;
+  }
   if (
     !id ||
     actor.powerCooldown > 0 ||
@@ -432,7 +453,7 @@ function applyPower(id, actor) {
     actor.powerEffect ||
     actor.nextKickPower !== 1 ||
     actor.nextKickReach !== 1 ||
-    (typeof twoOnePlay !== 'undefined' && twoOnePlay) ||
+    (typeof twoOnePlay !== 'undefined' && twoOnePlay && actor === player1) ||
     snakeTackles.some(tackle => tackle.owner === actor)
   ) return false;
 
@@ -459,6 +480,20 @@ function applyPower(id, actor) {
   if (id === 'phantom' && !isBallControlledBy(actor)) {
     if (actor.isHuman) showPowerFeedback('Domine a bola para acionar o Drible da Abelha', true);
     return false;
+  }
+  if (id === 'shadow') {
+    const hasBall = (typeof isBallControlledBy === 'function' && isBallControlledBy(actor)) ||
+                    (typeof ball !== 'undefined' && ball.dribbleLockOwner === actor);
+    if (hasBall) {
+      if (actor.isHuman) showPowerFeedback('WEB é uma skill defensiva: só pode ser usada sem a bola!', true);
+      return false;
+    }
+    const isHome = !!(actor.isHuman || actor.isTeammate);
+    const inOwnDefensiveHalf = isHome ? actor.x <= CONFIG.pitch.centerX : actor.x >= CONFIG.pitch.centerX;
+    if (!inOwnDefensiveHalf) {
+      if (actor.isHuman) showPowerFeedback('WEB só pode ser ativada no seu campo de defesa!', true);
+      return false;
+    }
   }
 
   if (id === 'cannon') {
@@ -574,7 +609,7 @@ function applyPower(id, actor) {
       }
     }
   } else if (id === 'sprint') {
-    // A PANTERA DO CHIGIRI (HYOMA CHIGIRI) — Arranque Feral Rubi
+    // SPEEDSTER — Arranque Feral da Pantera Escarlate
     let dx = actor.facingX;
     let dy = actor.facingY;
     const len = Math.hypot(dx, dy) || 1;
@@ -583,9 +618,10 @@ function applyPower(id, actor) {
     actor.vx = dx * 9.6;
     actor.vy = dy * 9.6;
     actor.dashTimer = 0.82;
+    if (typeof triggerSpeedsterBurst === 'function') triggerSpeedsterBurst(actor);
     addImpactSpark(actor.x, actor.y, '#f43f5e', 16, 1.35);
     if (actor.isHuman) {
-      showPowerFeedback('A Pantera do Chigiri · Arranque feral!', false, false);
+      showPowerFeedback('Speedster · Arranque feral!', false, false);
     }
   } else if (id === 'ego') {
     actor.powerEffect = 'ego';
@@ -597,9 +633,9 @@ function applyPower(id, actor) {
     actor.visionPassesLeft = 2; // máximo de 2 passes teleguiados por ativação
     addImpactSpark(actor.x, actor.y, '#f9a8d4', 10, 0.9);
   } else if (id === 'shadow') {
-    actor.powerEffect = 'shadow';
-    actor.powerEffectTimer = 4;
-    addImpactSpark(actor.x, actor.y, '#818cf8', 12, 1.05);
+    if (typeof spawnWebTrap === 'function') {
+      spawnWebTrap(actor);
+    }
   } else if (id === 'sniper') {
     actor.powerEffect = 'sniper';
     actor.powerEffectTimer = 6;
@@ -608,22 +644,23 @@ function applyPower(id, actor) {
 
   actor.powerCooldown = (id === 'vision' || id === 'curve' || id === 'eagle' || id === 'sniper')
     ? 0
-    : (id === 'phantom' ? phantomStats(actor).cooldown : (POWER_COOLDOWNS[id] || 12));
+    : (id === 'phantom' ? phantomStats(actor).cooldown : (POWER_COOLDOWNS[id] || 15));
 
   if (actor.isHuman) {
     if (typeof MISSIONS !== 'undefined') MISSIONS.recordPowerUsed();
     const customFeed =
       id === 'cannon' ? 'Chute de Pistola armado · finalize!' :
+      id === 'sprint' ? 'Speedster · Arranque feral!' :
       id === 'curve' ? 'Curva Impossível! Mire e aperte Chute (ou Clique)' :
       id === 'control' ? 'Domínio Perfeito! Bola dominada no pé' :
       id === 'eagle' ? 'Salto de Águia armado (6s)' :
       id === 'sniper' ? 'Instinto de Artilheiro armado (6s)' :
-      id === 'shadow' ? 'Sombra do Marcador ativa (4s)' :
+      id === 'shadow' ? 'WEB armada no campo! (4,5s)' :
       id === 'ego' ? 'Despertar do Ego ativo (5s)' :
       `${POWER_LABELS[id]} ativado`;
-    showPowerFeedback(customFeed, false, !['cannon', 'sprint', 'phantom', 'curve'].includes(id));
+    showPowerFeedback(customFeed, false, !['cannon', 'sprint', 'phantom', 'curve', 'shadow'].includes(id));
   } else {
-    showPowerFeedback(`${POWER_LABELS[id]}: bot`, true);
+    showPowerFeedback(`${POWER_LABELS[id]}: bot`, true, false);
   }
 
   if (id === 'sprint') Sound.playLightning();
@@ -632,23 +669,75 @@ function applyPower(id, actor) {
   return true;
 }
 
+const BOT_FIXED_POWER_POOL = ['cannon', 'sprint', 'phantom', 'vision', 'curve', 'snakeTackle', 'control', 'eagle', 'sniper', 'shadow', 'ego'];
+
+function assignFixedBotPowers(bots) {
+  const pool = BOT_FIXED_POWER_POOL.filter(id => ITEMS.powers.some(p => p.id === id));
+  const list = Array.isArray(bots) ? bots : [];
+  list.forEach((bot, idx) => {
+    if (!bot || bot.isHuman) return;
+    bot.aiPowerId = pool[Math.floor(Math.random() * pool.length)] || pool[idx % pool.length] || 'sprint';
+    bot.aiPowerThink = 1.6 + Math.random() * 1.8;
+  });
+}
+
 function updatePowerBot(dt, actor = player2) {
+  if (!actor || actor.isHuman || actor.webSnareTimer > 0) return;
   actor.aiPowerThink -= dt;
   if (actor.aiPowerThink > 0 || actor.powerCooldown > 0 || actor.powerEffectTimer > 0 || actor.powerEffect) return;
-  actor.aiPowerThink = 6.5 + Math.random() * 3;
-  if (Math.random() > 0.40 || Math.hypot(ball.x - actor.x, ball.y - actor.y) > 220) return;
+  actor.aiPowerThink = 1.6 + Math.random() * 1.5;
 
-  const botPowers = ITEMS.powers.filter(power => power.id !== 'twoOne');
-  actor.aiPowerId = botPowers[Math.floor(Math.random() * botPowers.length)].id;
+  // Mantém a mesma habilidade fixa durante toda a partida (sorteada apenas uma vez se ainda não existir)
+  if (!actor.aiPowerId) {
+    assignFixedBotPowers([actor]);
+  }
   const id = actor.aiPowerId;
-  const nearBall = Math.hypot(ball.x - actor.x, ball.y - actor.y) <= actor.radius + ball.radius + 36;
-  if (['cannon', 'curve', 'control', 'phantom'].includes(id) && !nearBall) return;
-  if (id === 'sniper' && !(actor.x < 480 && nearBall)) return;
-  if (['curve', 'phantom'].includes(id) && !isBallControlledBy(actor)) return;
-  if (id === 'sprint' && Math.hypot(ball.x - actor.x, ball.y - actor.y) < 40) return;
-  if (id === 'shadow' && Math.hypot(ball.x - actor.x, ball.y - actor.y) > 175) return;
+  if (!id) return;
+
+  const isHome = !!(actor.isHuman || actor.isTeammate);
+  const p = CONFIG.pitch;
+  const distToBall = Math.hypot(ball.x - actor.x, ball.y - actor.y);
+  const nearBall = distToBall <= actor.radius + ball.radius + 42;
+  const controlled = isBallControlledBy(actor);
+  const opponents = typeof getOpponentsOf === 'function' ? getOpponentsOf(actor) : [isHome ? player2 : player1];
+  const oppNearThreat = opponents.find(opp =>
+    opp &&
+    Math.hypot(opp.x - actor.x, opp.y - actor.y) < 195 &&
+    (isBallControlledBy(opp) || opp.dashTimer > 0 || opp.twoOneRunTimer > 0 || opp.phantomDribbleTimer > 0 || opp.snakeLungeTimer > 0 || Math.hypot(opp.vx, opp.vy) > 3.1)
+  );
+  const inOwnDefensiveHalf = isHome ? actor.x < p.centerX + 90 : actor.x > p.centerX - 90;
+  const inAttackHalf = isHome ? actor.x > p.centerX - 60 : actor.x < p.centerX + 60;
+
+  if (id === 'cannon' || id === 'curve') {
+    if (!nearBall && !controlled) return;
+  } else if (id === 'phantom') {
+    if (!controlled) return;
+  } else if (id === 'sniper') {
+    if (!inAttackHalf || (!nearBall && !controlled)) return;
+  } else if (id === 'control') {
+    if (controlled || distToBall > actor.radius + ball.radius + 60) return;
+  } else if (id === 'snakeTackle') {
+    if (typeof canUseSnakeTackle !== 'function' || !canUseSnakeTackle(actor).ok) return;
+  } else if (id === 'shadow') {
+    // WEB estritamente defensiva: sem a bola e apenas no campo defensivo do próprio bot
+    const hasBall = controlled || ball.dribbleLockOwner === actor;
+    const inOwnDefensiveHalf = isHome ? actor.x <= p.centerX : actor.x >= p.centerX;
+    if (hasBall || !inOwnDefensiveHalf) return;
+    if (!oppNearThreat && !opponents.some(o => o && Math.hypot(o.x - actor.x, o.y - actor.y) < 140)) {
+      return;
+    }
+  } else if (id === 'sprint') {
+    if (distToBall < 48 && !controlled) return;
+    if (distToBall > 340) return;
+  } else if (id === 'eagle') {
+    if (distToBall > actor.radius + ball.radius + 54) return;
+  } else if (id === 'ego') {
+    if (distToBall > 220 && !controlled) return;
+  } else if (id === 'vision') {
+    if (distToBall > 250 && !controlled) return;
+  }
+
   applyPower(id, actor);
-  actor.aiPowerId = null;
 }
 
 function drawVisionPuzzleOverlay(renderCtx) {
@@ -703,7 +792,11 @@ function drawVisionPuzzleOverlay(renderCtx) {
 }
 
 function drawTwoVtwoVisionGuidance(renderCtx) {
-  if (gameMode !== '2v2' || player1.powerEffect !== 'vision' || player1.powerEffectTimer <= 0) return;
+  const isTeam = ['2v2', '3v3', '4v4', '5v5'].includes(gameMode);
+  if (!isTeam || player1.powerEffect !== 'vision' || player1.powerEffectTimer <= 0) return;
+  const mates = typeof getActiveHomePlayers === 'function'
+    ? getActiveHomePlayers().filter(m => m !== player1)
+    : [homeMate];
   renderCtx.save();
   renderCtx.lineCap = 'round';
   renderCtx.setLineDash([5, 5]);
@@ -711,9 +804,12 @@ function drawTwoVtwoVisionGuidance(renderCtx) {
   renderCtx.globalAlpha = pulse;
   renderCtx.strokeStyle = '#f9a8d4';
   renderCtx.lineWidth = 2;
-  renderCtx.beginPath();
-  renderCtx.arc(homeMate.x, homeMate.y, homeMate.radius + 11, 0, Math.PI * 2);
-  renderCtx.stroke();
+  for (const mate of mates) {
+    if (!mate) continue;
+    renderCtx.beginPath();
+    renderCtx.arc(mate.x, mate.y, mate.radius + 11, 0, Math.PI * 2);
+    renderCtx.stroke();
+  }
 
   renderCtx.setLineDash([]);
 
@@ -748,11 +844,12 @@ function drawTwoVtwoVisionGuidance(renderCtx) {
 
 /**
  * Desenha auras e indicadores táticos de habilidades ativas no campo
- * (Domínio Perfeito, Salto de Águia, Instinto de Artilheiro, Sombra do Marcador e Despertar do Ego).
+ * (Domínio Perfeito, Salto de Águia, Instinto de Artilheiro e Despertar do Ego).
  */
 function drawSkillAuras(renderCtx) {
-  const actors = [player1, player2];
-  if (gameMode === '2v2') actors.push(homeMate, awayMate);
+  const actors = typeof getAllActivePlayers === 'function'
+    ? getAllActivePlayers()
+    : [player1, player2, ...(gameMode === '2v2' ? [homeMate, awayMate] : [])];
 
   const now = performance.now();
   renderCtx.save();
@@ -832,35 +929,7 @@ function drawSkillAuras(renderCtx) {
       renderCtx.restore();
     }
 
-    // 4. Sombra do Marcador: anel índigo + linha de marcação ao adversário mais próximo da bola
-    if (actor.powerEffect === 'shadow' && actor.powerEffectTimer > 0) {
-      renderCtx.save();
-      renderCtx.strokeStyle = '#818cf8';
-      renderCtx.shadowColor = '#6366f1';
-      renderCtx.shadowBlur = 12;
-      renderCtx.lineWidth = 2.4;
-      renderCtx.setLineDash([5, 4]);
-      renderCtx.beginPath();
-      renderCtx.arc(actor.x, actor.y, actor.radius + 9 + Math.sin(now / 95) * 2, 0, Math.PI * 2);
-      renderCtx.stroke();
-
-      const opps = (actor.isHuman || actor.isTeammate)
-        ? (gameMode === '2v2' ? [player2, awayMate] : [player2])
-        : (gameMode === '2v2' ? [player1, homeMate] : [player1]);
-      const target = opps.slice().sort((a, b) => Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y))[0];
-      if (target) {
-        renderCtx.globalAlpha = 0.5;
-        renderCtx.lineWidth = 2;
-        renderCtx.beginPath();
-        renderCtx.moveTo(actor.x, actor.y);
-        renderCtx.lineTo(target.x, target.y);
-        renderCtx.stroke();
-      }
-      renderCtx.setLineDash([]);
-      renderCtx.restore();
-    }
-
-    // 5. Despertar do Ego: aura intensa dourada/carmesim contínua
+    // 4. Despertar do Ego: aura intensa dourada/carmesim contínua
     if (actor.powerEffect === 'ego' && actor.powerEffectTimer > 0) {
       const pulse = Math.sin(now / 85) * 2.8;
       renderCtx.save();

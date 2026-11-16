@@ -11,8 +11,10 @@ const AI_ROLES = {
   CARRIER: 'CARRIER',
   PRESS: 'PRESS',
   STRIKER_SUPPORT: 'STRIKER_SUPPORT',
+  WING_SUPPORT: 'WING_SUPPORT',
   MIDFIELD_BALANCE: 'MIDFIELD_BALANCE',
-  COVER: 'COVER'
+  COVER: 'COVER',
+  GK_COVER: 'GK_COVER'
 };
 
 const aiState = {
@@ -28,25 +30,6 @@ const teamTacticalMemory = {
   home: { presser: null, holdTimer: 0, roles: new Map() },
   away: { presser: null, holdTimer: 0, roles: new Map() }
 };
-
-function shadowAdjustedTarget(actor, targetX, targetY, opponents) {
-  if (actor.powerEffect !== 'shadow' || !opponents.length) {
-    return { x: targetX, y: targetY };
-  }
-  const ballCarrier = findControlledActor(opponents);
-  const mark = ballCarrier || opponents.reduce((nearest, opponent) =>
-    Math.hypot(opponent.x - ball.x, opponent.y - ball.y) < Math.hypot(nearest.x - ball.x, nearest.y - ball.y)
-      ? opponent
-      : nearest,
-    opponents[0]
-  );
-  // Puxa o marcador para cima da linha entre o alvo e o próprio gol
-  const pullWeight = ballCarrier === mark ? 0.55 : 0.34;
-  return {
-    x: targetX * (1 - pullWeight) + (mark.x + mark.vx * 4) * pullWeight,
-    y: targetY * (1 - pullWeight) + (mark.y + mark.vy * 4) * pullWeight
-  };
-}
 
 function predictBallPosition(frames = 12) {
   const p = CONFIG.pitch;
@@ -106,6 +89,7 @@ function unstickFromPostOrWall(actor, dirX, dirY) {
 }
 
 function driveBotTo(actor, targetX, targetY, speedScale = 1.0, precisionStop = false, teammates = []) {
+  if (!actor || actor.webSnareTimer > 0) return;
   const p = CONFIG.pitch;
   let goalX = targetX;
   let goalY = targetY;
@@ -117,9 +101,9 @@ function driveBotTo(actor, targetX, targetY, speedScale = 1.0, precisionStop = f
     const sepX = actor.x - mate.x;
     const sepY = actor.y - mate.y;
     const sepDist = Math.hypot(sepX, sepY);
-    const personalBubble = actor.radius + mate.radius + 54;
+    const personalBubble = actor.radius + mate.radius + (teammates.length >= 4 ? 76 : teammates.length === 3 ? 66 : 54);
     if (sepDist < personalBubble && sepDist > 0.001) {
-      const push = (personalBubble - sepDist) * 0.85;
+      const push = (personalBubble - sepDist) * 0.9;
       goalX += (sepX / sepDist) * push * 0.45;
       goalY += (sepY / sepDist) * push;
     }
@@ -143,10 +127,11 @@ function driveBotTo(actor, targetX, targetY, speedScale = 1.0, precisionStop = f
   actor.facingX = dirX;
   actor.facingY = dirY;
 
+  const pace = typeof getModePaceScale === 'function' ? getModePaceScale().player : 1;
   const staggerScale = actor.tackleStaggerTimer > 0 ? 0.35 : 1.0;
   const arriveScale = precisionStop && dist < 24 ? Math.max(0.25, dist / 24) : 1.0;
   const egoBoost = actor.powerEffect === 'ego' ? 1.16 : 1.0;
-  const accel = CONFIG.physics.playerAcceleration * speedScale * staggerScale * arriveScale * egoBoost;
+  const accel = CONFIG.physics.playerAcceleration * pace * speedScale * staggerScale * arriveScale * egoBoost;
 
   actor.vx += dirX * accel;
   actor.vy += dirY * accel;
@@ -341,40 +326,55 @@ function findBestPassTarget(actor, teammates, opponents, attackDir) {
 
 /**
  * Atribui papéis táticos distintos por time sem que bots disputem a mesma função.
- * Escalável para 2v2, 3v3 e 4v4.
+ * Escalável para 1v1, 2v2, 3v3, 4v4 e 5v5 (com Goleiro-linha/Fixo, Alas/Meias e Pivô).
  */
 function assignTeamRoles(teamKey, teamActors, opponents, attackDir, predicted) {
   const memory = teamTacticalMemory[teamKey];
   memory.roles.clear();
+  if (!teamActors.length) return memory.roles;
 
-  const carrier = findControlledActor(teamActors);
+  // Reserva um defensor fixo / goleiro-linha quando há 3+ jogadores no time (nunca player1)
+  let anchorDef = null;
+  let fieldActors = teamActors;
+  if (teamActors.length >= 3) {
+    const candidates = teamActors.filter(a => !a.isHuman);
+    candidates.sort((a, b) => (a.aiRoleSlot || 0) - (b.aiRoleSlot || 0));
+    anchorDef = candidates[candidates.length - 1] || null;
+    if (anchorDef) {
+      // Caso o goleiro-linha seja claramente o mais próximo da bola na pequena área, vira CARRIER se controlar
+      if (isBallControlledBy(anchorDef)) {
+        memory.roles.set(anchorDef, AI_ROLES.CARRIER);
+      } else {
+        memory.roles.set(anchorDef, AI_ROLES.GK_COVER);
+      }
+      fieldActors = teamActors.filter(a => a !== anchorDef);
+    }
+  }
+
+  const carrier = findControlledActor(fieldActors);
   if (carrier) {
     memory.presser = carrier;
     memory.holdTimer = 0.25;
     memory.roles.set(carrier, AI_ROLES.CARRIER);
 
-    const others = teamActors
+    const others = fieldActors
       .filter(a => a !== carrier)
       .sort((a, b) => (b.x - a.x) * attackDir);
 
-    if (others.length === 1) {
-      // Em 2v2: se estamos pressionados atrás, o parceiro oferece saída; mais à frente, ataca o espaço livre
-      memory.roles.set(others[0], AI_ROLES.STRIKER_SUPPORT);
-    } else if (others.length >= 2) {
-      others.forEach((mate, idx) => {
-        if (idx === 0) memory.roles.set(mate, AI_ROLES.STRIKER_SUPPORT);
-        else if (idx === others.length - 1) memory.roles.set(mate, AI_ROLES.COVER);
-        else memory.roles.set(mate, AI_ROLES.MIDFIELD_BALANCE);
-      });
-    }
+    others.forEach((mate, idx) => {
+      if (idx === 0) memory.roles.set(mate, AI_ROLES.STRIKER_SUPPORT);
+      else if (idx === 1 && others.length >= 2) memory.roles.set(mate, AI_ROLES.WING_SUPPORT);
+      else if (idx === others.length - 1 && others.length >= 3) memory.roles.set(mate, AI_ROLES.COVER);
+      else memory.roles.set(mate, AI_ROLES.MIDFIELD_BALANCE);
+    });
     return memory.roles;
   }
 
-  // Sem posse: escolhe 1 PRESS com histerese e distribui COVER / MIDFIELD_BALANCE pelos demais
+  // Sem posse: escolhe 1 PRESS com histerese e distribui STRIKER_SUPPORT / WING_SUPPORT / MIDFIELD_BALANCE / COVER
   let presser = null;
   let bestPressScore = Infinity;
 
-  for (const actor of teamActors) {
+  for (const actor of fieldActors) {
     const wrongSide = attackDir < 0
       ? (actor.x < predicted.x - 10 ? 78 : 0)
       : (actor.x > predicted.x + 10 ? 78 : 0);
@@ -390,16 +390,16 @@ function assignTeamRoles(teamKey, teamActors, opponents, attackDir, predicted) {
     memory.presser = presser;
     memory.holdTimer = 0.28;
   }
-  memory.roles.set(presser, AI_ROLES.PRESS);
+  if (presser) memory.roles.set(presser, AI_ROLES.PRESS);
 
-  // Demais companheiros ordenados do mais defensivo ao mais adiantado
-  const rest = teamActors
+  const rest = fieldActors
     .filter(a => a !== presser)
     .sort((a, b) => (a.x - b.x) * attackDir);
 
   rest.forEach((mate, idx) => {
-    if (idx === 0) memory.roles.set(mate, AI_ROLES.COVER);
-    else if (idx === rest.length - 1 && rest.length >= 2) memory.roles.set(mate, AI_ROLES.STRIKER_SUPPORT);
+    if (idx === 0 && rest.length >= 2) memory.roles.set(mate, AI_ROLES.COVER);
+    else if (idx === rest.length - 1) memory.roles.set(mate, AI_ROLES.STRIKER_SUPPORT);
+    else if (idx === 1) memory.roles.set(mate, AI_ROLES.WING_SUPPORT);
     else memory.roles.set(mate, AI_ROLES.MIDFIELD_BALANCE);
   });
 
@@ -407,21 +407,23 @@ function assignTeamRoles(teamKey, teamActors, opponents, attackDir, predicted) {
 }
 
 function executeTeamCarrierBehavior(actor, teammates, opponents, attackDir) {
+  if (actor.webSnareTimer > 0) return;
   const p = CONFIG.pitch;
   const targetGoalX = attackDir > 0 ? p.right : p.left;
   const shotTarget = chooseBestShotTarget(targetGoalX, opponents);
   const dx = shotTarget.x - ball.x;
   const dy = shotTarget.y - ball.y;
   const goalDist = Math.hypot(dx, dy) || 1;
+  const shootRange = Math.max(320, p.width * 0.36);
 
   const shotBlockedClose = opponents.some(o =>
     (o.x - ball.x) * attackDir > 0 &&
-    Math.hypot(o.x - ball.x, o.y - ball.y) < 115 &&
+    Math.hypot(o.x - ball.x, o.y - ball.y) < 120 &&
     pointSegmentDistance(o.x, o.y, ball.x, ball.y, shotTarget.x, shotTarget.y) < o.radius + ball.radius + 10
   );
 
   // 1. Finalização objetiva se ângulo limpo dentro da zona ofensiva
-  if (goalDist < 335 && !shotBlockedClose && actor.kickCooldownTimer <= 0) {
+  if (goalDist < shootRange && !shotBlockedClose && actor.kickCooldownTimer <= 0) {
     actor.tryKick(ball, dx / goalDist, dy / goalDist);
     return;
   }
@@ -440,39 +442,111 @@ function executeTeamCarrierBehavior(actor, teammates, opponents, attackDir) {
   );
   if (nearestDef && (nearestDef.x - actor.x) * attackDir > 0 && Math.hypot(nearestDef.x - actor.x, nearestDef.y - actor.y) < 122) {
     steerY = nearestDef.y > actor.y
-      ? Math.max(p.top + 44, actor.y - 90)
-      : Math.min(p.bottom - 44, actor.y + 90);
+      ? Math.max(p.top + 44, actor.y - 95)
+      : Math.min(p.bottom - 44, actor.y + 95);
   }
   const driveGoalX = attackDir > 0 ? p.right - 68 : p.left + 68;
-  driveBotTo(actor, driveGoalX, steerY, 1.06, false, teammates);
+  const carrierPace = teammates.length >= 4 ? 0.96 : 1.04;
+  driveBotTo(actor, driveGoalX, steerY, carrierPace, false, teammates);
 }
 
 function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, predicted) {
+  if (!actor || actor.webSnareTimer > 0) return;
   const p = CONFIG.pitch;
+  const g = CONFIG.goals;
   const targetGoalX = attackDir > 0 ? p.right : p.left;
   const ownGoalX = attackDir > 0 ? p.left : p.right;
   const teamCarrier = findControlledActor(teammates);
   const oppCarrier = findControlledActor(opponents);
+  const bigTeam = teammates.length >= 4;
+  const minZoneGap = bigTeam ? 158 : 138;
 
   if (role === AI_ROLES.CARRIER) {
     executeTeamCarrierBehavior(actor, teammates, opponents, attackDir);
     return;
   }
 
+  if (role === AI_ROLES.GK_COVER) {
+    // Goleiro-linha avançado com reação humana: joga à frente da pequena área, dando combate e deixando espaço atrás/nos cantos
+    if (typeof actor.gkAimY !== 'number') actor.gkAimY = p.centerY;
+    if (actor.gkReactCooldown > 0) {
+      actor.gkReactCooldown = Math.max(0, actor.gkReactCooldown - CONFIG.physics.fixedDelta);
+    }
+    const vyShift = Math.abs(ball.vy - (actor.gkLastBallVy || 0));
+    if (vyShift > 1.75) {
+      actor.gkReactCooldown = 0.16;
+    }
+    actor.gkLastBallVy = ball.vy;
+
+    const immediateX = ball.x + ball.vx * 1.5;
+    const immediateY = ball.y + ball.vy * 1.5;
+    const threatDist = Math.abs(immediateX - ownGoalX);
+
+    // Atuação avançada entre a linha da grande área e o setor defensivo intermediário
+    const sweeperMin = Math.max(p.goalAreaWidth * 1.45, p.penaltyWidth * 0.68);
+    const sweeperMax = Math.max(sweeperMin + 60, p.width * 0.28);
+    const guardOffset = Math.max(sweeperMin, Math.min(sweeperMax, threatDist * 0.34));
+    const gkX = ownGoalX + attackDir * guardOffset;
+    const targetGoalY = Math.max(g.topY + 22, Math.min(g.bottomY - 22, p.centerY + (immediateY - p.centerY) * 0.54));
+    const smoothRate = actor.gkReactCooldown > 0 ? 0.036 : 0.088;
+    actor.gkAimY += (targetGoalY - actor.gkAimY) * smoothRate;
+
+    const oppCarrierNearBox = oppCarrier && Math.abs(oppCarrier.x - ownGoalX) < p.penaltyWidth * 1.45;
+    const looseBallNearBox = !oppCarrier && threatDist < p.penaltyWidth * 1.25 && Math.hypot(ball.vx, ball.vy) < 4.2;
+
+    if (oppCarrierNearBox || looseBallNearBox) {
+      // Sai da boca do gol para dar combate ao portador/bola, abrindo espaço atrás e nos cantos para dribles/tabelas
+      const challengeTarget = oppCarrierNearBox ? oppCarrier : { x: immediateX, y: immediateY };
+      const wrongSide = attackDir < 0
+        ? actor.x < challengeTarget.x - 8
+        : actor.x > challengeTarget.x + 8;
+      const rushTarget = wrongSide
+        ? getAttackApproachPoint(actor, targetGoalX, p.centerY, challengeTarget)
+        : { x: challengeTarget.x - attackDir * 12, y: challengeTarget.y };
+      const rushSpeed = actor.gkReactCooldown > 0 ? 0.58 : 0.78;
+      driveBotTo(actor, rushTarget.x, rushTarget.y, rushSpeed, false, teammates);
+    } else {
+      const gkSpeed = actor.gkReactCooldown > 0 ? 0.56 : 0.75;
+      driveBotTo(actor, gkX, actor.gkAimY, gkSpeed, true, teammates);
+    }
+
+    const ballDist = Math.hypot(ball.x - actor.x, ball.y - actor.y);
+    const onGoalSide = attackDir < 0 ? actor.x > ball.x - 4 : actor.x < ball.x + 4;
+    if (ballDist <= actor.radius + ball.radius + CONFIG.physics.kickReachMargin && onGoalSide && actor.kickCooldownTimer <= 0) {
+      const passTarget = findBestPassTarget(actor, teammates, opponents, attackDir);
+      if (passTarget) {
+        actor.tryKick(ball, 0, 0, true, passTarget);
+      } else {
+        actor.tryKick(ball, attackDir, (p.centerY - ball.y) / 280);
+      }
+    }
+    return;
+  }
+
   if (role === AI_ROLES.STRIKER_SUPPORT) {
     const anchor = teamCarrier || predicted;
     const spot = chooseSmartSupportSpot(anchor, actor, opponents, attackDir, teammates);
-    const target = shadowAdjustedTarget(actor, spot.x, spot.y, opponents);
-    driveBotTo(actor, target.x, target.y, 1.05, false, teammates);
+    const spaced = enforceTeammateSpacing(actor, spot.x, spot.y, teammates, minZoneGap);
+    driveBotTo(actor, spaced.x, spaced.y, bigTeam ? 0.84 : 0.94, false, teammates);
+    return;
+  }
+
+  if (role === AI_ROLES.WING_SUPPORT) {
+    const anchor = teamCarrier || predicted;
+    const wingSign = (actor.aiRoleSlot % 2 === 0 ? -1 : 1) * (anchor.y > p.centerY ? -1 : 1);
+    const wingY = Math.max(p.top + 48, Math.min(p.bottom - 48, p.centerY + wingSign * (p.height * 0.37)));
+    const targetWingX = Math.max(p.left + 96, Math.min(p.right - 96, anchor.x * 0.55 + p.centerX * 0.45 + attackDir * (p.width * 0.14)));
+    const spaced = enforceTeammateSpacing(actor, targetWingX, wingY, teammates, minZoneGap);
+    driveBotTo(actor, spaced.x, spaced.y, bigTeam ? 0.82 : 0.92, true, teammates);
     return;
   }
 
   if (role === AI_ROLES.MIDFIELD_BALANCE) {
-    // Zona intermediária de equilíbrio para futuros 3v3 / 4v4
-    const midX = (predicted.x + ownGoalX) * 0.52;
-    const laneOffset = predicted.y > p.centerY ? -115 : 115;
-    const balanced = enforceTeammateSpacing(actor, midX, p.centerY + laneOffset, teammates, 130);
-    driveBotTo(actor, balanced.x, balanced.y, 1.02, true, teammates);
+    const midX = Math.max(p.left + 110, Math.min(p.right - 110, predicted.x * 0.42 + p.centerX * 0.38 + ownGoalX * 0.20));
+    const slotSign = (actor.aiRoleSlot % 2 === 0 ? 1 : -1);
+    const laneOffset = predicted.y > p.centerY ? -p.height * 0.22 : p.height * 0.22;
+    const balanced = enforceTeammateSpacing(actor, midX, p.centerY + laneOffset * 0.72 + slotSign * 34, teammates, minZoneGap);
+    driveBotTo(actor, balanced.x, balanced.y, bigTeam ? 0.80 : 0.90, true, teammates);
     return;
   }
 
@@ -482,14 +556,13 @@ function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, pr
     const pressX = oppCarrier ? oppCarrier.x + oppCarrier.vx * 3 - attackDir * 12 : approach.x;
     const pressY = oppCarrier ? oppCarrier.y + oppCarrier.vy * 3 : approach.y;
     const rawTarget = approach.wrongSide ? approach : { x: pressX, y: pressY };
-    const adjusted = shadowAdjustedTarget(actor, rawTarget.x, rawTarget.y, opponents);
-    driveBotTo(actor, adjusted.x, adjusted.y, 1.12, false, teammates);
+    driveBotTo(actor, rawTarget.x, rawTarget.y, bigTeam ? 0.98 : 1.08, false, teammates);
 
     const ballDist = Math.hypot(ball.x - actor.x, ball.y - actor.y);
     const onGoalSide = attackDir < 0 ? actor.x > ball.x - 2 : actor.x < ball.x + 2;
     if (ballDist <= actor.radius + ball.radius + CONFIG.physics.kickReachMargin && onGoalSide && actor.kickCooldownTimer <= 0) {
       const passTarget = findBestPassTarget(actor, teammates, opponents, attackDir);
-      if (passTarget && (ball.x - ownGoalX) * attackDir < 420) {
+      if (passTarget && (ball.x - ownGoalX) * attackDir < p.width * 0.56) {
         actor.tryKick(ball, 0, 0, true, passTarget);
       } else {
         const goalShot = chooseBestShotTarget(targetGoalX, opponents);
@@ -499,7 +572,7 @@ function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, pr
     return;
   }
 
-  // AI_ROLES.COVER: proteção coordenada da zona defensiva + marcação de linha de passe
+  // AI_ROLES.COVER: proteção coordenada da zona defensiva + disciplina de cobertura
   const inDangerZone = attackDir < 0
     ? predicted.x > p.centerX + 70
     : predicted.x < p.centerX - 70;
@@ -507,23 +580,17 @@ function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, pr
   let coverY;
 
   if (inDangerZone) {
-    // Entre a bola e o gol próprio, deslocado levemente do lado oposto ao pressionador
-    coverX = ownGoalX - attackDir * Math.max(58, Math.min(260, Math.abs(predicted.x - ownGoalX) * 0.52));
-    coverY = p.centerY + (predicted.y - p.centerY) * 0.55;
-    coverY = Math.max(CONFIG.goals.topY - 30, Math.min(CONFIG.goals.bottomY + 30, coverY));
+    coverX = ownGoalX - attackDir * Math.max(72, Math.min(p.width * 0.32, Math.abs(predicted.x - ownGoalX) * 0.48));
+    coverY = p.centerY + (predicted.y - p.centerY) * 0.52;
+    coverY = Math.max(CONFIG.goals.topY - 46, Math.min(CONFIG.goals.bottomY + 46, coverY));
   } else {
-    // Marca atacante adversário sem bola e fecha corredor central
-    const nonCarrierOpps = opponents.filter(o => o !== oppCarrier);
-    const mark = nonCarrierOpps[0] || opponents[0];
-    coverX = Math.max(p.left + 74, Math.min(p.right - 74, mark.x - attackDir * 72));
-    coverY = mark.y * 0.68 + p.centerY * 0.32;
+    coverX = ownGoalX + attackDir * (p.width * 0.28);
+    coverY = p.centerY + (predicted.y - p.centerY) * 0.34;
   }
 
-  const spaced = enforceTeammateSpacing(actor, coverX, coverY, teammates, 132);
-  const target = shadowAdjustedTarget(actor, spaced.x, spaced.y, opponents);
-  driveBotTo(actor, target.x, target.y, 1.04, true, teammates);
+  const spaced = enforceTeammateSpacing(actor, coverX, coverY, teammates, minZoneGap);
+  driveBotTo(actor, spaced.x, spaced.y, bigTeam ? 0.80 : 0.90, true, teammates);
 
-  // Se a bola cruzar sua área de cobertura, afasta ou liga contra-ataque limpo
   const ballDist = Math.hypot(ball.x - actor.x, ball.y - actor.y);
   const onGoalSide = attackDir < 0 ? actor.x > ball.x - 2 : actor.x < ball.x + 2;
   if (ballDist <= actor.radius + ball.radius + CONFIG.physics.kickReachMargin && onGoalSide && actor.kickCooldownTimer <= 0) {
@@ -536,16 +603,98 @@ function executeBotRoleBehavior(actor, role, teammates, opponents, attackDir, pr
   }
 }
 
+function updateTeamBots(dt) {
+  const p = CONFIG.pitch;
+  if (teamTacticalMemory.home.holdTimer > 0) {
+    teamTacticalMemory.home.holdTimer = Math.max(0, teamTacticalMemory.home.holdTimer - dt);
+  }
+  if (teamTacticalMemory.away.holdTimer > 0) {
+    teamTacticalMemory.away.holdTimer = Math.max(0, teamTacticalMemory.away.holdTimer - dt);
+  }
+
+  const homeTeam = typeof getActiveHomePlayers === 'function' ? getActiveHomePlayers() : [player1];
+  const awayTeam = typeof getActiveAwayPlayers === 'function' ? getActiveAwayPlayers() : [player2];
+  const predicted = predictBallPosition(9);
+
+  // 1. Time Adversário (Away Team)
+  if (gameMode === 'match') {
+    updateAI(dt);
+  } else if (gameMode !== 'training' && awayTeam.length) {
+    const awayRoles = assignTeamRoles('away', awayTeam, homeTeam, -1, predicted);
+    for (const bot of awayTeam) {
+      if (!bot) continue;
+      updatePowerBot(dt, bot);
+      executeBotRoleBehavior(bot, awayRoles.get(bot) || AI_ROLES.PRESS, awayTeam, homeTeam, -1, predicted);
+    }
+  }
+
+  // 2. Aliados da Casa (Home Team Bots em 2v2, 3v3, 4v4, 5v5 e Treino)
+  if (gameMode === 'training') {
+    updateHomeMateAI(dt);
+    return;
+  }
+
+  const homeBots = homeTeam.filter(a => a && !a.isHuman);
+  if (!homeBots.length) return;
+
+  const twoOneTarget = (typeof twoOnePlay !== 'undefined' && twoOnePlay && twoOnePlay.mode === 'teammate')
+    ? twoOnePlay.target
+    : null;
+  const homeRoles = assignTeamRoles('home', homeTeam, awayTeam, 1, predicted);
+  const blueCarrier = findControlledActor(homeTeam);
+
+  for (const bot of homeBots) {
+    updatePowerBot(dt, bot);
+    if (bot.webSnareTimer > 0) continue;
+
+    if (bot.visionRunTimer > 0 && isBallControlledBy(bot)) {
+      bot.facingX = bot.visionRunDirectionX;
+      bot.facingY = bot.visionRunDirectionY;
+      bot.vx += bot.facingX * CONFIG.physics.playerAcceleration * 1.45;
+      bot.vy += bot.facingY * CONFIG.physics.playerAcceleration * 1.45;
+      continue;
+    }
+
+    if (twoOneTarget === bot && typeof updateTwoOneTeammateBehavior === 'function' && updateTwoOneTeammateBehavior(dt)) {
+      continue;
+    }
+
+    if (isBallControlledBy(bot)) {
+      executeTeamCarrierBehavior(bot, homeTeam, awayTeam, 1);
+      continue;
+    }
+
+    if (blueCarrier === player1 && homeBots.length === 1) {
+      const spot = chooseSmartSupportSpot(player1, bot, awayTeam, 1, homeTeam);
+      driveBotTo(bot, spot.x, spot.y, 1.06, false, homeTeam);
+      continue;
+    }
+
+    // Respeita a regra estrita de no máximo 1 pressionador: se player1 já está próximo/disputando a bola, libera para outra zona
+    let role = homeRoles.get(bot) || AI_ROLES.COVER;
+    if (role === AI_ROLES.PRESS) {
+      const distBot = Math.hypot(predicted.x - bot.x, predicted.y - bot.y);
+      const distP1 = Math.hypot(predicted.x - player1.x, predicted.y - player1.y);
+      const p1Engaged = distP1 < 120 || distP1 <= distBot + 24;
+      if (p1Engaged) {
+        role = homeTeam.length >= 4 ? AI_ROLES.MIDFIELD_BALANCE : AI_ROLES.COVER;
+      }
+    }
+    executeBotRoleBehavior(bot, role, homeTeam, awayTeam, 1, predicted);
+  }
+}
+
 function updateAI(dt) {
   const p = CONFIG.pitch;
   if (teamTacticalMemory.away.holdTimer > 0) {
     teamTacticalMemory.away.holdTimer = Math.max(0, teamTacticalMemory.away.holdTimer - dt);
   }
   if (gameMode !== 'training') updatePowerBot(dt, player2);
+  if (player2.webSnareTimer > 0) return;
 
-  if (gameMode === '2v2') {
-    const awayTeam = [player2, awayMate];
-    const homeTeam = [player1, homeMate];
+  if (gameMode !== 'match') {
+    const awayTeam = typeof getActiveAwayPlayers === 'function' ? getActiveAwayPlayers() : [player2, awayMate];
+    const homeTeam = typeof getActiveHomePlayers === 'function' ? getActiveHomePlayers() : [player1, homeMate];
     const predicted = predictBallPosition(9);
     const roles = assignTeamRoles('away', awayTeam, homeTeam, -1, predicted);
     executeBotRoleBehavior(player2, roles.get(player2) || AI_ROLES.PRESS, awayTeam, homeTeam, -1, predicted);
@@ -586,8 +735,7 @@ function updateAI(dt) {
     aiState.targetY = approach.y;
   }
 
-  const shadowTarget = shadowAdjustedTarget(player2, aiState.targetX, aiState.targetY, defenders);
-  driveBotTo(player2, shadowTarget.x, shadowTarget.y, 1.06);
+  driveBotTo(player2, aiState.targetX, aiState.targetY, 1.06);
 
   if (
     distToBall <= player2.radius + ball.radius + CONFIG.physics.kickReachMargin &&
@@ -600,11 +748,11 @@ function updateAI(dt) {
 }
 
 function updateAwayMateAI(dt) {
-  if (gameMode !== '2v2') return;
+  if (gameMode === 'training' || gameMode === 'match') return;
   updatePowerBot(dt, awayMate);
 
-  const awayTeam = [player2, awayMate];
-  const homeTeam = [player1, homeMate];
+  const awayTeam = typeof getActiveAwayPlayers === 'function' ? getActiveAwayPlayers() : [player2, awayMate];
+  const homeTeam = typeof getActiveHomePlayers === 'function' ? getActiveHomePlayers() : [player1, homeMate];
   const predicted = predictBallPosition(9);
   const roles = assignTeamRoles('away', awayTeam, homeTeam, -1, predicted);
   executeBotRoleBehavior(awayMate, roles.get(awayMate) || AI_ROLES.COVER, awayTeam, homeTeam, -1, predicted);
@@ -616,49 +764,12 @@ function updateHomeMateAI(dt) {
     teamTacticalMemory.home.holdTimer = Math.max(0, teamTacticalMemory.home.holdTimer - dt);
   }
 
-  // Comportamento especial da Visão de Campo
-  if (gameMode === '2v2' && homeMate.visionRunTimer > 0 && isBallControlledBy(homeMate)) {
-    homeMate.facingX = homeMate.visionRunDirectionX;
-    homeMate.facingY = homeMate.visionRunDirectionY;
-    homeMate.vx += homeMate.facingX * CONFIG.physics.playerAcceleration * 1.45;
-    homeMate.vy += homeMate.facingY * CONFIG.physics.playerAcceleration * 1.45;
-    return;
-  }
-
   // Comportamento especial Toque e Passa (rework em js/skills/twoOne.js)
   if (typeof updateTwoOneTeammateBehavior === 'function' && updateTwoOneTeammateBehavior(dt)) {
     return;
   }
 
-  // Modo 2v2: usa o mesmo motor tático escalável respeitando o usuário humano (player1)
-  if (gameMode === '2v2') {
-    const homeTeam = [player1, homeMate];
-    const awayTeam = [player2, awayMate];
-    const predicted = predictBallPosition(9);
-
-    if (isBallControlledBy(homeMate)) {
-      executeTeamCarrierBehavior(homeMate, homeTeam, awayTeam, 1);
-      return;
-    }
-
-    const blueCarrier = findControlledActor(homeTeam);
-    if (blueCarrier === player1) {
-      const spot = chooseSmartSupportSpot(player1, homeMate, awayTeam, 1, homeTeam);
-      const target = shadowAdjustedTarget(homeMate, spot.x, spot.y, awayTeam);
-      driveBotTo(homeMate, target.x, target.y, 1.06, false, homeTeam);
-      return;
-    }
-
-    // Sem posse azul: só pressiona se estiver claramente mais perto que player1 ou se player1 passou da linha da bola
-    const distMate = Math.hypot(predicted.x - homeMate.x, predicted.y - homeMate.y);
-    const distP1 = Math.hypot(predicted.x - player1.x, predicted.y - player1.y);
-    const p1OutOfPlay = player1.x > predicted.x + 36;
-    const shouldPress = (distMate < distP1 - 12 || p1OutOfPlay);
-
-    const role = shouldPress ? AI_ROLES.PRESS : AI_ROLES.COVER;
-    executeBotRoleBehavior(homeMate, role, homeTeam, awayTeam, 1, predicted);
-    return;
-  }
+  if (gameMode !== 'training') return;
 
   // Modo Treino livre: acompanha suavemente em apoio espaçado
   let targetX = Math.max(p.left + 30, Math.min(p.right - 40, ball.x - 125));

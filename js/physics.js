@@ -152,21 +152,26 @@ function pointSegmentDistance(px, py, x1, y1, x2, y2) {
 }
 
 function isPassPathBlocked(from, to, attacker) {
-  const opponents = (attacker === player1 || attacker === homeMate)
-    ? [player2, ...(gameMode === '2v2' ? [awayMate] : [])]
-    : [player1, ...(gameMode === '2v2' ? [homeMate] : [])];
+  const opponents = typeof getOpponentsOf === 'function'
+    ? getOpponentsOf(attacker)
+    : (attacker === player1 || attacker === homeMate || attacker?.isHuman || attacker?.isTeammate)
+      ? [player2, ...(gameMode === '2v2' ? [awayMate] : [])]
+      : [player1, ...(gameMode === '2v2' ? [homeMate] : [])];
   if (opponents.some(opponent => pointSegmentDistance(opponent.x, opponent.y, from.x, from.y, to.x, to.y) < opponent.radius + ball.radius + 8)) {
     return true;
   }
   return posts.some(post => pointSegmentDistance(post.x, post.y, from.x, from.y, to.x, to.y) < post.radius + ball.radius + 4);
 }
 
-function isVisionPassLaneBlocked() {
-  const blockers = [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
-  if (gameMode !== 'training' && blockers.some(opponent => pointSegmentDistance(opponent.x, opponent.y, ball.x, ball.y, homeMate.x, homeMate.y) < opponent.radius + ball.radius + 12)) {
+function isVisionPassLaneBlocked(targetMate = homeMate) {
+  const blockers = typeof getActiveAwayPlayers === 'function'
+    ? getActiveAwayPlayers()
+    : [player2, ...(gameMode === '2v2' ? [awayMate] : [])];
+  if (!targetMate) return false;
+  if (gameMode !== 'training' && blockers.some(opponent => pointSegmentDistance(opponent.x, opponent.y, ball.x, ball.y, targetMate.x, targetMate.y) < opponent.radius + ball.radius + 12)) {
     return true;
   }
-  return posts.some(post => pointSegmentDistance(post.x, post.y, ball.x, ball.y, homeMate.x, homeMate.y) < post.radius + ball.radius + 5);
+  return posts.some(post => pointSegmentDistance(post.x, post.y, ball.x, ball.y, targetMate.x, targetMate.y) < post.radius + ball.radius + 5);
 }
 
 function isBallControlledBy(actor) {

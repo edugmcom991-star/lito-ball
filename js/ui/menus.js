@@ -101,7 +101,8 @@ function updatePowerHud() {
   const curveArmed = power?.id === 'curve' && player1.powerEffect === 'curve';
   const eagleArmed = power?.id === 'eagle' && (player1.powerEffect === 'eagle' || player1.nextKickReach > 1);
   const sniperArmed = power?.id === 'sniper' && player1.powerEffect === 'sniper';
-  const shadowActive = power?.id === 'shadow' && player1.powerEffect === 'shadow' && player1.powerEffectTimer > 0;
+  const webTrapActive = typeof webTraps !== 'undefined' && Array.isArray(webTraps) && webTraps.some(t => t.owner === player1 && !t.triggered);
+  const playerWebbed = (player1.webSnareTimer || 0) > 0;
   const egoActive = power?.id === 'ego' && player1.powerEffect === 'ego' && player1.powerEffectTimer > 0;
   const twoOneActive = typeof twoOnePlay !== 'undefined' && !!twoOnePlay;
   const snakeTackle = snakeTackles.find(tackle => tackle.owner === player1);
@@ -115,7 +116,7 @@ function updatePowerHud() {
   powerButton.setAttribute('aria-label', powerButtonLabel);
 
   btnPass.hidden = !gameState.running;
-  const visionLongPassMode = gameMode === '2v2' || gameMode === 'training';
+  const visionLongPassMode = (typeof isTeamMode === 'function' && isTeamMode()) || gameMode === 'training';
   btnPass.textContent = curveArmed ? 'Passe curvo (F)' : visionActive && visionLongPassMode ? 'Passe da Visão (F)' : visionActive ? 'Passe teleguiado (F)' : 'Passe (F)';
   btnPass.title = curveArmed
     ? 'Passe curvo para o companheiro mais próximo (F)'
@@ -128,10 +129,10 @@ function updatePowerHud() {
   const effectActive = player1.powerEffectTimer > 0 || snakeActive;
   const cooldownReady = player1.powerCooldown <= 0;
   const countdownLocked = (gameState.countdownTimer || 0) > 0;
-  const ready = cooldownReady && !shotBuffPending && !effectActive && !twoOneActive && !countdownLocked;
+  const ready = cooldownReady && !shotBuffPending && !effectActive && !twoOneActive && !countdownLocked && !playerWebbed;
 
   powerButton.classList.toggle('cooldown', !cooldownReady);
-  powerButton.classList.toggle('active', visionActive || eagleArmed || sniperArmed || shadowActive || egoActive || twoOneActive || snakeActive);
+  powerButton.classList.toggle('active', visionActive || eagleArmed || sniperArmed || webTrapActive || egoActive || twoOneActive || snakeActive);
   powerButton.disabled = !ready;
 
   if (ready && !powerReadyLast && power) {
@@ -150,7 +151,9 @@ function updatePowerHud() {
       ? '100%'
       : `${Math.max(0, 100 * (1 - player1.powerCooldown / cooldownDuration))}%`;
 
-  const statusText = snakeTackle
+  const statusText = playerWebbed
+    ? `Preso na WEB: ${player1.webSnareTimer.toFixed(1)}s`
+    : snakeTackle
     ? (snakeTackle.phase === 'lunge'
       ? 'Bote da Serpente em avanço!'
       : snakeTackle.phase === 'strike'
@@ -166,8 +169,8 @@ function updatePowerHud() {
             ? `Alcance estendido: ${player1.powerEffectTimer.toFixed(1)}s`
             : sniperArmed
               ? `Mira armada: ${player1.powerEffectTimer.toFixed(1)}s`
-              : shadowActive
-                ? `Sombra ativa: ${player1.powerEffectTimer.toFixed(1)}s`
+              : webTrapActive
+                ? 'WEB armada no campo!'
                 : egoActive
                   ? `Despertar do Ego: ${player1.powerEffectTimer.toFixed(1)}s`
                   : curveArmed
@@ -175,7 +178,7 @@ function updatePowerHud() {
                     : shotBuffPending
                       ? 'Próximo chute fortalecido'
                       : player1.dashTimer > 0
-                        ? `Arrancada: ${player1.dashTimer.toFixed(1)}s`
+                        ? `Speedster: ${player1.dashTimer.toFixed(1)}s`
                         : player1.powerEffectTimer > 0
                           ? `Efeito: ${player1.powerEffectTimer.toFixed(1)}s`
                           : ready
@@ -245,7 +248,7 @@ function closeFeaturePage() {
   const menuPage = document.getElementById('menu-page');
   const mainCard = document.getElementById('main-menu-card');
   menuPage.classList.add('hidden');
-  menuPage.classList.remove('menu-page--shop', 'menu-page--credits', 'menu-page--missions');
+  menuPage.classList.remove('menu-page--shop', 'menu-page--credits', 'menu-page--missions', 'menu-page--career');
   mainCard.style.display = '';
   refreshResumeSlot();
   if (typeof updateMissionsBadgeUI === 'function') updateMissionsBadgeUI();
@@ -276,6 +279,7 @@ function showFeaturePage(page) {
         <button type="button" data-cat="shirts" class="cat-tab-btn ${activeCategory === 'shirts' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'shirts'}">${getSvgIcon('icon-shirt', 16)}<span>Camisas</span></button>
         <button type="button" data-cat="powers" class="cat-tab-btn ${activeCategory === 'powers' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'powers'}">${getSvgIcon('icon-bolt', 16)}<span>Habilidades</span></button>
         <button type="button" data-cat="cards" class="cat-tab-btn ${activeCategory === 'cards' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'cards'}">${getSvgIcon('icon-card', 16)}<span>Cartinhas FUT</span></button>
+        <button type="button" data-cat="avatars" class="cat-tab-btn ${activeCategory === 'avatars' ? 'active' : ''}" role="tab" aria-selected="${activeCategory === 'avatars'}">${getSvgIcon('icon-user-pfp', 16)}<span>Fotos de Perfil</span></button>
       </div>
     `
     : '';
@@ -339,7 +343,9 @@ function renderItems() {
     ? profile.ownedShirts
     : activeCategory === 'cards'
       ? (profile.ownedCards || ['card_gold'])
-      : profile.ownedPowers;
+      : activeCategory === 'avatars'
+        ? (profile.ownedAvatars || ['pfp_default'])
+        : profile.ownedPowers;
   const items = activePage === 'inventory'
     ? allItems.filter(item => owned.includes(item.id))
     : allItems;
@@ -349,6 +355,7 @@ function renderItems() {
     const equippedShirt = ITEMS.shirts.find(s => s.id === profile.equippedShirt);
     const equippedPower = ITEMS.powers.find(p => p.id === profile.equippedPower);
     const equippedCard = (ITEMS.cards || []).find(c => c.id === (profile.equippedCard || 'card_gold')) || (ITEMS.cards ? ITEMS.cards[0] : null);
+    const equippedAvatar = (ITEMS.avatars || []).find(a => a.id === (profile.equippedAvatar || 'pfp_default')) || (ITEMS.avatars ? ITEMS.avatars[0] : null);
 
     summaryHtml = `
       <div class="equipped-summary-bar">
@@ -369,20 +376,42 @@ function renderItems() {
           ${equippedPower ? '<button type="button" class="hud-btn" id="unequip-power-btn" style="margin-inline-start:auto;">Remover</button>' : ''}
         </div>
         <div class="equipped-summary-chip">
-          <span class="nav-icon" aria-hidden="true">${getSvgIcon('icon-card', 22)}</span>
+          <span class="nav-icon" aria-hidden="true">${equippedCard ? renderCardBadgeIcon(equippedCard, 22) : getSvgIcon('icon-card', 22)}</span>
           <div>
-            <small>Cartinha Oficial</small>
-            <strong>${equippedCard ? equippedCard.name : 'Ouro Clássico'}</strong>
+            <small>Cartinha Equipada</small>
+            <strong>${equippedCard ? equippedCard.name : 'Card Ouro Clássico'}</strong>
           </div>
-          <button type="button" class="hud-btn" id="view-career-btn" style="margin-inline-start:auto;">Ver Carreira</button>
+        </div>
+        <div class="equipped-summary-chip">
+          <span class="nav-icon" aria-hidden="true">${equippedAvatar && typeof renderAvatarMediaHtml === 'function' ? renderAvatarMediaHtml(equippedAvatar.id, 'summary-pfp-img', 28) : getSvgIcon('icon-user-pfp', 22)}</span>
+          <div>
+            <small>Foto de Perfil</small>
+            <strong>${equippedAvatar ? equippedAvatar.name : 'Brasão Litoball'}</strong>
+          </div>
+          ${equippedAvatar && equippedAvatar.id !== 'pfp_default' ? '<button type="button" class="hud-btn" id="unequip-avatar-btn" style="margin-inline-start:auto;">Padrão</button>' : ''}
         </div>
       </div>
     `;
   }
 
+  const categoryBannerHtml = activeCategory === 'cards'
+    ? `<div class="category-helper-banner">${getSvgIcon('icon-card', 18)}<span>${
+        activePage === 'inventory'
+          ? 'Escolha o tema visual da sua <strong>Cartinha Oficial</strong> e clique em <strong>Equipar</strong> para ativar na Carreira e nos gols.'
+          : 'Desbloqueie e equipe novos visuais colecionáveis para a sua <strong>Cartinha Oficial</strong>.'
+      }</span></div>`
+    : activeCategory === 'avatars'
+      ? `<div class="category-helper-banner">${getSvgIcon('icon-user-pfp', 18)}<span>${
+          activePage === 'inventory'
+            ? 'Escolha uma <strong>Foto de Perfil</strong> para exibir na sua Cartinha FUT e na tela de Carreira.'
+            : 'Desbloqueie fotos oficiais de retrato para personalizar a sua <strong>Cartinha FUT</strong>.'
+        }</span></div>`
+      : '';
+
   if (activePage === 'inventory' && !items.length) {
     container.innerHTML = `
       ${summaryHtml}
+      ${categoryBannerHtml}
       <div class="empty-inventory">
         <p>Você ainda não possui itens nesta categoria.</p>
         <button type="button" class="primary-btn cyber-btn" id="go-to-shop-btn"><span class="btn-inline-label">${getSvgIcon('icon-shop', 18)}<span>Visitar a Loja</span></span></button>
@@ -400,14 +429,18 @@ function renderItems() {
       ? profile.equippedShirt === item.id
       : activeCategory === 'cards'
         ? (profile.equippedCard || 'card_gold') === item.id
-        : profile.equippedPower === item.id;
+        : activeCategory === 'avatars'
+          ? (profile.equippedAvatar || 'pfp_default') === item.id
+          : profile.equippedPower === item.id;
 
     const coinMini = getSvgIcon('icon-litocoin', 14, 'svg-coin-icon');
     const iconHtml = activeCategory === 'shirts'
       ? `<span class="item-icon shirt-icon" style="background:linear-gradient(90deg,${item.colors.join(',')})">${item.badge}</span>`
       : activeCategory === 'cards'
-        ? `<span class="item-icon item-icon-card card-badge-${item.theme}" style="background:linear-gradient(135deg,${item.colors.join(',')})">${item.badge}</span>`
-        : `<span class="item-icon item-icon-power">${renderPowerIconMedia(item.id, 22, item.name)}</span>`;
+        ? `<span class="item-icon item-icon-card card-badge-${item.theme}" style="background:linear-gradient(135deg,${item.colors.join(',')})">${renderCardBadgeIcon(item, 20)}</span>`
+        : activeCategory === 'avatars'
+          ? `<span class="item-icon item-icon-avatar">${typeof renderAvatarMediaHtml === 'function' ? renderAvatarMediaHtml(item.id, 'item-avatar-img', 44) : getSvgIcon('icon-user-pfp', 22)}</span>`
+          : `<span class="item-icon item-icon-power">${renderPowerIconMedia(item.id, 22, item.name)}</span>`;
 
     const statusBadge = equipped
       ? '<span class="item-status-pill equipped">&#10003; Equipado</span>'
@@ -421,7 +454,9 @@ function renderItems() {
       ? `<span class="item-meta">Recarga base: ${POWER_COOLDOWNS[item.id] || 12}s</span>`
       : activeCategory === 'cards'
         ? `<span class="item-meta">Raridade: ${item.rarity || 'Colecionável'}</span>`
-        : `<span class="item-meta">Uniforme oficial de clube</span>`;
+        : activeCategory === 'avatars'
+          ? '<span class="item-meta">Retrato oficial de perfil</span>'
+          : `<span class="item-meta">Uniforme oficial de clube</span>`;
 
     const level = item.id === 'phantom' ? phantomLevelFor(player1) : 0;
     const upgradeCost = item.id === 'phantom' ? PHANTOM_UPGRADE_COSTS[level + 1] : null;
@@ -430,14 +465,24 @@ function renderItems() {
       ? `<small class="upgrade-level">Nível ${level}/3 · corte ${phantomInfo.duration.toFixed(2)}s · esquiva ${Math.round(phantomInfo.dodgeChance * 100)}% · recarga ${phantomInfo.cooldown}s</small>`
       : '';
 
+    const cardArtBackdrop = activeCategory === 'cards'
+      ? `
+        <div class="menu-card-art-layer" aria-hidden="true">
+          ${item.image ? renderCardArtHtml(item, 'menu-card-bg-img') : '<span class="gold-foil-pattern"></span>'}
+        </div>
+        <div class="menu-card-scrim" aria-hidden="true"></div>
+      `
+      : '';
+
     const actionLabel = has
-      ? (equipped ? 'Equipado' : 'Equipar')
+      ? (equipped ? '&#10003; Equipado' : 'Equipar')
       : item.price === 0
         ? 'Resgatar'
         : `<span class="btn-inline-label"><span>Comprar</span> ${coinMini} <span>${item.price.toLocaleString('pt-BR')}</span></span>`;
 
     return `
-      <article class="menu-item ${equipped ? 'is-equipped' : ''} ${activeCategory === 'cards' ? 'menu-item--card card-theme-' + item.theme : ''}">
+      <article class="menu-item ${equipped ? 'is-equipped' : ''} ${activeCategory === 'cards' ? 'menu-item--card card-theme-' + item.theme + (item.image ? ' has-card-art' : ' is-gold-foil') : ''}">
+        ${cardArtBackdrop}
         <div class="item-card-top">
           ${iconHtml}
           ${statusBadge}
@@ -456,11 +501,8 @@ function renderItems() {
     `;
   }).join('');
 
-  container.innerHTML = `${summaryHtml}<div class="menu-items">${cardsHtml}</div>`;
+  container.innerHTML = `${summaryHtml}${categoryBannerHtml}<div class="menu-items">${cardsHtml}</div>`;
   bindUnequipButtons();
-
-  const careerBtn = document.getElementById('view-career-btn');
-  if (careerBtn) careerBtn.addEventListener('click', () => showFeaturePage('career'));
 
   container.querySelectorAll('[data-item]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -470,7 +512,9 @@ function renderItems() {
         ? profile.ownedShirts
         : activeCategory === 'cards'
           ? (profile.ownedCards = profile.ownedCards || ['card_gold'])
-          : profile.ownedPowers;
+          : activeCategory === 'avatars'
+            ? (profile.ownedAvatars = profile.ownedAvatars || ['pfp_default'])
+            : profile.ownedPowers;
 
       if (!arr.includes(item.id)) {
         if (item.price > 0 && ECONOMY.getCoins() < item.price) {
@@ -491,6 +535,8 @@ function renderItems() {
         profile.equippedShirt = item.id;
       } else if (activeCategory === 'cards') {
         profile.equippedCard = item.id;
+      } else if (activeCategory === 'avatars') {
+        profile.equippedAvatar = item.id;
       } else {
         profile.equippedPower = item.id;
       }
@@ -536,58 +582,83 @@ function renderCareer() {
   const points = (stats.goals * 1.5) + (stats.saves * 2.0) + (stats.tackles * 1.2) + (stats.assists * 1.4) + (stats.matches * 0.5);
   const ratingOverall = Math.min(99, Math.max(76, Math.floor(76 + Math.min(23, points))));
 
+  const hasCardArt = Boolean(cardData && cardData.image);
+  const equippedAvatarId = profile.equippedAvatar || 'pfp_default';
+  const hasCustomPfp = equippedAvatarId !== 'pfp_default';
+  const avatarCanvasSize = (hasCardArt || hasCustomPfp) ? 58 : 96;
+  const playerPos = (playerConfig && playerConfig.position) ? playerConfig.position : 'ATA';
+  const natCode = (playerConfig && playerConfig.nationality) ? playerConfig.nationality : 'BR';
+  const natFlagHtml = typeof renderNationalityFlagSvg === 'function' ? renderNationalityFlagSvg(natCode, 20, 14) : '';
+  const pfpBoxHtml = hasCustomPfp && typeof renderAvatarMediaHtml === 'function'
+    ? `<div class="career-card-pfp-box">${renderAvatarMediaHtml(equippedAvatarId, 'career-card-pfp-img', 96)}</div>`
+    : '';
+
   container.innerHTML = `
     <div class="career-layout">
-      <div class="career-card-showcase">
-        <div class="career-fut-card card-theme-${cardData.theme}" id="career-card-display">
+      <div class="career-card-showcase card-showcase-theme-${cardData.theme}">
+        <div class="career-fut-card card-theme-${cardData.theme} ${hasCardArt ? 'has-card-art' : 'is-gold-foil'}" id="career-card-display">
           <div class="career-card-inner">
+            <div class="career-card-art" aria-hidden="true">
+              ${hasCardArt ? renderCardArtHtml(cardData, 'career-card-bg-img') : '<span class="gold-foil-pattern"></span>'}
+            </div>
+            <div class="career-card-scrim" aria-hidden="true"></div>
+            <div class="career-card-frame-trim" aria-hidden="true"></div>
+
             <div class="career-card-top">
               <div class="career-card-rating-block">
                 <span class="career-card-rating">${ratingOverall}</span>
-                <span class="career-card-pos">ATA</span>
+                <span class="career-card-pos">${playerPos}</span>
+                <span class="career-card-nat" title="${typeof getNationalityInfo === 'function' ? getNationalityInfo(natCode).name : natCode}">
+                  ${natFlagHtml}<span>${natCode}</span>
+                </span>
               </div>
               <div class="career-card-badge-wrap">
-                <span class="career-card-badge-icon">${cardData.badge}</span>
+                <span class="career-card-badge-icon">${renderCardBadgeIcon(cardData, 22)}</span>
                 <small class="career-card-badge-label">${cardData.rarity}</small>
               </div>
             </div>
 
-            <div class="career-card-avatar-wrap">
-              <canvas id="career-avatar-canvas" width="110" height="110"></canvas>
-              <div class="career-card-avatar-shine" aria-hidden="true"></div>
-            </div>
-
-            <div class="career-card-name-band">
-              <span class="career-card-name">${(playerConfig.name || 'LITO').toUpperCase()}</span>
-            </div>
-
-            <div class="career-card-divider" aria-hidden="true"></div>
-
-            <div class="career-card-stats-grid">
-              <div class="career-stat-cell">
-                <span class="career-stat-num">${stats.goals}</span>
-                <span class="career-stat-tag">GOL</span>
-              </div>
-              <div class="career-stat-cell">
-                <span class="career-stat-num">${stats.matches}</span>
-                <span class="career-stat-tag">PJ</span>
-              </div>
-              <div class="career-stat-cell">
-                <span class="career-stat-num">${stats.assists}</span>
-                <span class="career-stat-tag">AST</span>
-              </div>
-              <div class="career-stat-cell">
-                <span class="career-stat-num">${stats.tackles}</span>
-                <span class="career-stat-tag">DES</span>
-              </div>
-              <div class="career-stat-cell">
-                <span class="career-stat-num">${stats.saves}</span>
-                <span class="career-stat-tag">SAV</span>
+            <div class="career-card-hero">
+              ${pfpBoxHtml}
+              <div class="career-card-avatar-wrap ${(hasCardArt || hasCustomPfp) ? 'is-corner-emblem' : 'is-center-emblem'}">
+                <canvas id="career-avatar-canvas" width="${avatarCanvasSize}" height="${avatarCanvasSize}"></canvas>
+                <div class="career-card-avatar-shine" aria-hidden="true"></div>
               </div>
             </div>
 
-            <div class="career-card-seal-band">
-              <span class="career-card-seal">${cardData.name.toUpperCase()}</span>
+            <div class="career-card-footer-block">
+              <div class="career-card-name-band">
+                <span class="career-card-name">${(playerConfig.name || 'LITO').toUpperCase()}</span>
+              </div>
+
+              <div class="career-card-divider" aria-hidden="true"></div>
+
+              <div class="career-card-stats-grid">
+                <div class="career-stat-cell">
+                  <span class="career-stat-num">${stats.goals}</span>
+                  <span class="career-stat-tag">GOL</span>
+                </div>
+                <div class="career-stat-cell">
+                  <span class="career-stat-num">${stats.matches}</span>
+                  <span class="career-stat-tag">PJ</span>
+                </div>
+                <div class="career-stat-cell">
+                  <span class="career-stat-num">${stats.assists}</span>
+                  <span class="career-stat-tag">AST</span>
+                </div>
+                <div class="career-stat-cell">
+                  <span class="career-stat-num">${stats.tackles}</span>
+                  <span class="career-stat-tag">DES</span>
+                </div>
+                <div class="career-stat-cell">
+                  <span class="career-stat-num">${stats.saves}</span>
+                  <span class="career-stat-tag">SAV</span>
+                </div>
+              </div>
+
+              <div class="career-card-seal-band">
+                <span class="career-card-seal">${cardData.name.toUpperCase()}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -596,38 +667,38 @@ function renderCareer() {
       <div class="career-details-panel">
         <div class="career-metrics-card">
           <h3 class="heading-with-icon">${getSvgIcon('icon-career', 22)}<span>Estatísticas Vitais da Carreira</span></h3>
-          <p class="career-desc">Seus feitos são registrados em tempo real no estádio e persistem na sua cartinha oficial.</p>
+          <p class="career-desc">Seus feitos são registrados em tempo real no estádio e exibidos na sua Cartinha Oficial.</p>
           <div class="career-stat-cards-grid">
             <div class="career-metric-tile">
-              <span class="tile-icon">⚽</span>
+              <span class="tile-icon" aria-hidden="true">${getSvgIcon('icon-stat-ball', 22)}</span>
               <div class="tile-info">
                 <small>Gols Totais</small>
                 <strong>${stats.goals}</strong>
               </div>
             </div>
             <div class="career-metric-tile">
-              <span class="tile-icon">🏟️</span>
+              <span class="tile-icon" aria-hidden="true">${getSvgIcon('icon-stat-stadium', 22)}</span>
               <div class="tile-info">
                 <small>Partidas Jogadas</small>
                 <strong>${stats.matches}</strong>
               </div>
             </div>
             <div class="career-metric-tile">
-              <span class="tile-icon">🎯</span>
+              <span class="tile-icon" aria-hidden="true">${getSvgIcon('icon-training', 22)}</span>
               <div class="tile-info">
                 <small>Assistências</small>
                 <strong>${stats.assists}</strong>
               </div>
             </div>
             <div class="career-metric-tile">
-              <span class="tile-icon">🛡️</span>
+              <span class="tile-icon" aria-hidden="true">${getSvgIcon('icon-skill-shadow', 22)}</span>
               <div class="tile-info">
                 <small>Desarmes Certos</small>
                 <strong>${stats.tackles}</strong>
               </div>
             </div>
             <div class="career-metric-tile highlight-save">
-              <span class="tile-icon">🧤</span>
+              <span class="tile-icon" aria-hidden="true">${getSvgIcon('icon-stat-gloves', 22)}</span>
               <div class="tile-info">
                 <small>Defesas Milagrosas (Saves)</small>
                 <strong>${stats.saves}</strong>
@@ -638,26 +709,32 @@ function renderCareer() {
 
         <div class="career-deck-selector">
           <div class="deck-selector-header">
-            <h4>Cartinhas Colecionáveis</h4>
-            <button type="button" class="hud-btn" id="career-shop-link">${getSvgIcon('icon-shop', 14)}<span>Abrir Loja de Cards</span></button>
+            <h4>Coleção de Cartinhas Oficiais</h4>
+            <button type="button" class="hud-btn" id="career-shop-link">${getSvgIcon('icon-shop', 14)}<span>Loja de Cartinhas</span></button>
           </div>
           <div class="career-deck-grid">
             ${allCards.map(c => {
               const isOwned = ownedCards.includes(c.id);
               const isEquipped = c.id === equippedCardId;
               return `
-                <div class="career-deck-item card-theme-${c.theme} ${isEquipped ? 'is-equipped' : ''} ${!isOwned ? 'is-locked' : ''}">
-                  <div class="deck-item-top">
-                    <span class="deck-badge">${c.badge}</span>
-                    <small class="deck-rarity">${c.rarity}</small>
+                <div class="career-deck-item card-theme-${c.theme} ${c.image ? 'has-card-art' : 'is-gold-foil'} ${isEquipped ? 'is-equipped' : ''} ${!isOwned ? 'is-locked' : ''}">
+                  <div class="deck-item-art" aria-hidden="true">
+                    ${c.image ? renderCardArtHtml(c, 'deck-item-bg-img') : '<span class="gold-foil-pattern"></span>'}
                   </div>
-                  <strong class="deck-name">${c.name}</strong>
-                  <div class="deck-actions">
-                    ${isEquipped
-                      ? '<span class="deck-pill active">&#10003; Ativa</span>'
-                      : isOwned
-                        ? `<button type="button" class="secondary-btn cyber-btn deck-btn" data-equip-card="${c.id}">Equipar</button>`
-                        : `<button type="button" class="primary-btn cyber-btn deck-btn" data-buy-card="${c.id}">Loja (${c.price} LC)</button>`}
+                  <div class="deck-item-scrim" aria-hidden="true"></div>
+                  <div class="deck-item-content">
+                    <div class="deck-item-top">
+                      <span class="deck-badge">${renderCardBadgeIcon(c, 18)}</span>
+                      <small class="deck-rarity">${c.rarity}</small>
+                    </div>
+                    <strong class="deck-name">${c.name}</strong>
+                    <div class="deck-actions">
+                      ${isEquipped
+                        ? '<span class="deck-pill active">&#10003; Equipada</span>'
+                        : isOwned
+                          ? `<button type="button" class="secondary-btn cyber-btn deck-btn" data-equip-card="${c.id}">Equipar</button>`
+                          : `<button type="button" class="primary-btn cyber-btn deck-btn" data-buy-card="${c.id}">Loja (${c.price} LC)</button>`}
+                    </div>
                   </div>
                 </div>
               `;
@@ -752,15 +829,86 @@ function bindUnequipButtons() {
       showPowerFeedback('Poder desequipado', true, false);
     });
   }
+  const unequipAvatarBtn = document.getElementById('unequip-avatar-btn');
+  if (unequipAvatarBtn) {
+    unequipAvatarBtn.addEventListener('click', () => {
+      profile.equippedAvatar = 'pfp_default';
+      persistProfile();
+      renderItems();
+      showPowerFeedback('Brasão padrão equipado', true, false);
+    });
+  }
 }
 
 function renderOptions() {
   const container = document.getElementById('menu-page-content');
   if (!container) return;
 
+  const ownedAvatars = profile.ownedAvatars || ['pfp_default'];
+  const avatarChoices = (ITEMS.avatars || []).filter(a => ownedAvatars.includes(a.id));
+  const currentPos = (playerConfig && playerConfig.position) ? playerConfig.position : 'ATA';
+  const currentNat = (playerConfig && playerConfig.nationality) ? playerConfig.nationality : 'BR';
+  const positionsHtml = (typeof PLAYER_POSITIONS !== 'undefined' ? PLAYER_POSITIONS : [{ id: 'ATA', label: 'ATA · Atacante' }]).map(pos => {
+    const posCode = pos.id || pos.code || 'ATA';
+    const shortDesc = String(pos.label || posCode).replace(/^[A-Z]+\s*·\s*/, '');
+    return `
+      <label class="pos-pill-option ${currentPos === posCode ? 'active' : ''}">
+        <input type="radio" name="opt-player-position" value="${posCode}" ${currentPos === posCode ? 'checked' : ''} />
+        <strong>${posCode}</strong>
+        <small>${shortDesc}</small>
+      </label>
+    `;
+  }).join('');
+  const natOptionsHtml = (typeof NATIONALITIES !== 'undefined' ? NATIONALITIES : [{ code: 'BR', name: 'Brasil' }]).map(nat => `
+    <option value="${nat.code}" ${currentNat === nat.code ? 'selected' : ''}>${nat.name} (${nat.code})</option>
+  `).join('');
+  const avatarGridHtml = avatarChoices.map(av => {
+    const active = (profile.equippedAvatar || 'pfp_default') === av.id;
+    return `
+      <button type="button" class="avatar-picker-btn ${active ? 'active' : ''}" data-pick-avatar="${av.id}" title="${av.name}">
+        ${typeof renderAvatarMediaHtml === 'function' ? renderAvatarMediaHtml(av.id, 'avatar-picker-img', 48) : ''}
+        <span>${av.name}</span>
+      </button>
+    `;
+  }).join('');
+
   container.innerHTML = `
     <div class="options-grid">
       <div id="options-appearance-slot" class="full-span"></div>
+
+      <section class="options-panel-card full-span" id="options-profile-panel">
+        <div class="options-panel-header">
+          <h3 class="heading-with-icon">${getSvgIcon('icon-user-pfp', 18)}<span>Perfil de Atleta &amp; Cartinha</span></h3>
+          <p>Personalize nome, posição em campo, nacionalidade e foto de perfil exibidos na Carreira e nos gols</p>
+        </div>
+        <div class="profile-form-grid">
+          <div class="profile-field">
+            <label for="opt-profile-name">Nome do Jogador</label>
+            <input id="opt-profile-name" type="text" maxlength="14" value="${String(playerConfig.name || 'Lito').replace(/"/g, '&quot;')}" placeholder="Seu apelido em campo" />
+          </div>
+          <div class="profile-field">
+            <label for="opt-profile-nat">Nacionalidade</label>
+            <div class="nat-select-wrap">
+              <span id="opt-profile-nat-flag" aria-hidden="true">${typeof renderNationalityFlagSvg === 'function' ? renderNationalityFlagSvg(currentNat, 26, 18) : ''}</span>
+              <select id="opt-profile-nat">${natOptionsHtml}</select>
+            </div>
+          </div>
+          <div class="profile-field full-span">
+            <span class="profile-field-label">Posição Tática</span>
+            <div class="position-radio-row" role="radiogroup" aria-label="Posição Tática">
+              ${positionsHtml}
+            </div>
+          </div>
+          <div class="profile-field full-span">
+            <div class="profile-avatar-header">
+              <span class="profile-field-label">Foto de Perfil Equipada (adquiridas na Loja)</span>
+              <button type="button" class="hud-btn" id="opt-open-avatars-shop">Abrir Loja de Fotos</button>
+            </div>
+            <div class="avatar-picker-grid">${avatarGridHtml}</div>
+          </div>
+        </div>
+        <p id="opt-profile-status" class="remap-status" aria-live="polite"></p>
+      </section>
 
       <section class="options-panel-card">
         <div class="options-panel-header">
@@ -834,6 +982,73 @@ function renderOptions() {
   if (appearanceSlot && appearancePanel) {
     appearanceSlot.appendChild(appearancePanel);
     updatePlayerPreview();
+  }
+
+  const profileStatus = document.getElementById('opt-profile-status');
+  const nameInput = document.getElementById('opt-profile-name');
+  const natSelect = document.getElementById('opt-profile-nat');
+  const natFlagEl = document.getElementById('opt-profile-nat-flag');
+  const setProfileFeedback = (msg) => {
+    if (profileStatus) {
+      profileStatus.textContent = msg;
+      profileStatus.dataset.tone = 'success';
+    }
+  };
+
+  if (nameInput) {
+    nameInput.addEventListener('input', () => {
+      const clean = nameInput.value.trim().slice(0, 14) || 'Lito';
+      playerConfig.name = clean;
+      profile.profileConfigured = true;
+      persistProfile();
+      if (typeof refreshModeHud === 'function') refreshModeHud();
+      setProfileFeedback(`Nome salvo: ${clean}`);
+    });
+  }
+
+  if (natSelect) {
+    natSelect.addEventListener('change', () => {
+      playerConfig.nationality = natSelect.value || 'BR';
+      profile.profileConfigured = true;
+      persistProfile();
+      if (natFlagEl && typeof renderNationalityFlagSvg === 'function') {
+        natFlagEl.innerHTML = renderNationalityFlagSvg(playerConfig.nationality, 26, 18);
+      }
+      setProfileFeedback(`Nacionalidade salva: ${playerConfig.nationality}`);
+    });
+  }
+
+  container.querySelectorAll('input[name="opt-player-position"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      playerConfig.position = radio.value;
+      profile.profileConfigured = true;
+      persistProfile();
+      container.querySelectorAll('.pos-pill-option').forEach(pill => {
+        pill.classList.toggle('active', pill.querySelector('input')?.checked);
+      });
+      setProfileFeedback(`Posição definida para ${playerConfig.position}`);
+    });
+  });
+
+  container.querySelectorAll('[data-pick-avatar]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      profile.equippedAvatar = btn.dataset.pickAvatar;
+      profile.profileConfigured = true;
+      persistProfile();
+      container.querySelectorAll('[data-pick-avatar]').forEach(b => {
+        b.classList.toggle('active', b.dataset.pickAvatar === profile.equippedAvatar);
+      });
+      setProfileFeedback('Foto de perfil atualizada!');
+    });
+  });
+
+  const openAvatarsShopBtn = document.getElementById('opt-open-avatars-shop');
+  if (openAvatarsShopBtn) {
+    openAvatarsShopBtn.addEventListener('click', () => {
+      activeCategory = 'avatars';
+      showFeaturePage('shop');
+    });
   }
 
   const range = container.querySelector('#feature-volume');
@@ -1076,7 +1291,7 @@ function renderCredits() {
     <section class="credits-hero">
       <div class="credits-hero-badge">LITOBALL &bull; CYBER-ARCADE EDITION</div>
       <h3>Futebol de Botão Tático em Tempo Real</h3>
-      <p>Construído com HTML5 Canvas 2D procedural, física dedicada, habilidades autorais e IA estratégica em 1v1 e 2v2.</p>
+      <p>Construído com HTML5 Canvas 2D procedural, física dedicada, habilidades autorais e IA estratégica do 1v1 até 5v5 e Treino Livre.</p>
     </section>
     <div class="credits-grid">
       <article class="credit-card">
@@ -1149,14 +1364,22 @@ function initUI() {
     s.classList.toggle('active', s.dataset.color.toLowerCase() === playerConfig.color.toLowerCase());
   });
 
+  const applyTeamColor = (colorValue) => {
+    playerConfig.color = colorValue;
+    if (typeof syncHomeTeamAppearance === 'function') {
+      syncHomeTeamAppearance();
+    } else {
+      player1.color = colorValue;
+      homeMate.color = colorValue;
+    }
+  };
+
   colorSwatches.forEach(swatch => {
     swatch.addEventListener('click', () => {
       colorSwatches.forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
-      playerConfig.color = swatch.dataset.color;
-      customColorInput.value = playerConfig.color;
-      player1.color = playerConfig.color;
-      homeMate.color = playerConfig.color;
+      customColorInput.value = swatch.dataset.color;
+      applyTeamColor(swatch.dataset.color);
       persistProfile();
       updatePlayerPreview();
     });
@@ -1164,9 +1387,7 @@ function initUI() {
 
   customColorInput.addEventListener('input', e => {
     colorSwatches.forEach(s => s.classList.remove('active'));
-    playerConfig.color = e.target.value;
-    player1.color = playerConfig.color;
-    homeMate.color = playerConfig.color;
+    applyTeamColor(e.target.value);
     persistProfile();
     updatePlayerPreview();
   });
@@ -1195,10 +1416,8 @@ function initUI() {
     button.addEventListener('click', () => showFeaturePage(button.dataset.view));
   });
 
-  document.getElementById('start-training-btn').addEventListener('click', () => {
-    Sound.init();
-    beginTraining();
-  });
+  initPlaySetupDialog();
+  initProfileOnboardingDialog();
 
   document.getElementById('power-activate').addEventListener('click', () => {
     Sound.init();
@@ -1217,4 +1436,155 @@ function initUI() {
   updateCoinUI();
   if (typeof updateMissionsBadgeUI === 'function') updateMissionsBadgeUI();
   syncModalInertState();
+}
+
+function attachLightDismissFallback(dialogEl) {
+  if (!dialogEl || ('closedBy' in HTMLDialogElement.prototype)) return;
+  let pointerDownOutside = false;
+  dialogEl.addEventListener('pointerdown', (e) => {
+    if (e.target !== dialogEl) {
+      pointerDownOutside = false;
+      return;
+    }
+    const r = dialogEl.getBoundingClientRect();
+    pointerDownOutside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  });
+  dialogEl.addEventListener('pointerup', (e) => {
+    if (!pointerDownOutside || e.target !== dialogEl) return;
+    pointerDownOutside = false;
+    dialogEl.close();
+  });
+}
+
+function initPlaySetupDialog() {
+  const openBtn = document.getElementById('open-play-setup-btn');
+  const dialog = document.getElementById('play-setup-dialog');
+  const form = document.getElementById('play-setup-form');
+  const closeBtn = document.getElementById('play-setup-close-btn');
+  const cancelBtn = document.getElementById('play-setup-cancel-btn');
+  if (!openBtn || !dialog || !form) return;
+
+  attachLightDismissFallback(dialog);
+
+  const syncDialogSelections = () => {
+    const modeValue = (typeof gameMode === 'string' && gameMode) ? gameMode : 'match';
+    const targetMode = form.querySelector(`input[name="setup-game-mode"][value="${modeValue}"]`)
+      || form.querySelector('input[name="setup-game-mode"][value="match"]');
+    if (targetMode) targetMode.checked = true;
+    const themeValue = profile.pitchTheme || 'classic';
+    const targetTheme = form.querySelector(`input[name="pitch-theme"][value="${themeValue}"]`);
+    if (targetTheme) targetTheme.checked = true;
+  };
+
+  openBtn.addEventListener('click', () => {
+    syncDialogSelections();
+    dialog.returnValue = '';
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  });
+
+  if (closeBtn) closeBtn.addEventListener('click', () => dialog.close('cancel'));
+  if (cancelBtn) cancelBtn.addEventListener('click', () => dialog.close('cancel'));
+
+  form.addEventListener('submit', (e) => {
+    const modeInput = form.querySelector('input[name="setup-game-mode"]:checked');
+    const themeInput = form.querySelector('input[name="pitch-theme"]:checked');
+    const selectedMode = modeInput ? modeInput.value : 'match';
+    if (themeInput && themeInput.value) {
+      profile.pitchTheme = themeInput.value;
+      persistProfile();
+    }
+    if (e.submitter && e.submitter.value === 'cancel') return;
+    dialog.returnValue = 'confirm';
+    if (typeof window.startModeFromSetup === 'function') {
+      window.startModeFromSetup(selectedMode);
+    }
+  });
+}
+
+function initProfileOnboardingDialog() {
+  const dialog = document.getElementById('profile-onboarding-dialog');
+  const form = document.getElementById('onboarding-form');
+  const nameInput = document.getElementById('onboard-name');
+  const natSelect = document.getElementById('onboard-nationality');
+  const posGroup = document.getElementById('onboard-position-group');
+  const avatarGroup = document.getElementById('onboard-avatar-group');
+  const skipBtn = document.getElementById('onboarding-skip-btn');
+  if (!dialog || !form) return;
+
+  const populateFields = () => {
+    if (nameInput) nameInput.value = playerConfig.name || 'Lito';
+    if (natSelect && typeof NATIONALITIES !== 'undefined') {
+      natSelect.innerHTML = NATIONALITIES.map(nat => `
+        <option value="${nat.code}" ${(playerConfig.nationality || 'BR') === nat.code ? 'selected' : ''}>${nat.name} (${nat.code})</option>
+      `).join('');
+    }
+    if (posGroup && typeof PLAYER_POSITIONS !== 'undefined') {
+      const currentPos = playerConfig.position || 'ATA';
+      posGroup.innerHTML = PLAYER_POSITIONS.map(pos => {
+        const posCode = pos.id || pos.code || 'ATA';
+        const shortDesc = String(pos.label || posCode).replace(/^[A-Z]+\s*·\s*/, '');
+        return `
+          <label class="pos-pill-option ${currentPos === posCode ? 'active' : ''}">
+            <input type="radio" name="onboard-position" value="${posCode}" ${currentPos === posCode ? 'checked' : ''} />
+            <strong>${posCode}</strong>
+            <small>${shortDesc}</small>
+          </label>
+        `;
+      }).join('');
+      posGroup.querySelectorAll('input[name="onboard-position"]').forEach(r => {
+        r.addEventListener('change', () => {
+          posGroup.querySelectorAll('.pos-pill-option').forEach(p => p.classList.toggle('active', p.querySelector('input')?.checked));
+        });
+      });
+    }
+    if (avatarGroup && typeof ITEMS !== 'undefined' && ITEMS.avatars) {
+      const owned = profile.ownedAvatars || ['pfp_default'];
+      const currentAv = profile.equippedAvatar || 'pfp_default';
+      avatarGroup.innerHTML = ITEMS.avatars.filter(a => owned.includes(a.id)).map(av => `
+        <label class="avatar-picker-btn ${currentAv === av.id ? 'active' : ''}">
+          <input type="radio" name="onboard-avatar" value="${av.id}" ${currentAv === av.id ? 'checked' : ''} hidden />
+          ${typeof renderAvatarMediaHtml === 'function' ? renderAvatarMediaHtml(av.id, 'avatar-picker-img', 48) : ''}
+          <span>${av.name}</span>
+        </label>
+      `).join('');
+      avatarGroup.querySelectorAll('input[name="onboard-avatar"]').forEach(r => {
+        r.addEventListener('change', () => {
+          avatarGroup.querySelectorAll('.avatar-picker-btn').forEach(card => card.classList.toggle('active', card.querySelector('input')?.checked));
+        });
+      });
+    }
+  };
+
+  if (skipBtn) {
+    skipBtn.addEventListener('click', () => {
+      profile.profileConfigured = true;
+      persistProfile();
+      dialog.close('skip');
+    });
+  }
+
+  form.addEventListener('submit', () => {
+    const rawName = nameInput ? nameInput.value.trim().slice(0, 14) : 'Lito';
+    playerConfig.name = rawName || 'Lito';
+    if (natSelect && natSelect.value) playerConfig.nationality = natSelect.value;
+    const posRadio = form.querySelector('input[name="onboard-position"]:checked');
+    if (posRadio) playerConfig.position = posRadio.value;
+    const avRadio = form.querySelector('input[name="onboard-avatar"]:checked');
+    if (avRadio) profile.equippedAvatar = avRadio.value;
+    profile.profileConfigured = true;
+    persistProfile();
+    if (typeof refreshModeHud === 'function') refreshModeHud();
+    showPowerFeedback(`Perfil de ${playerConfig.name} salvo!`, true, false);
+  });
+
+  if (!profile.profileConfigured) {
+    populateFields();
+    dialog.returnValue = '';
+    if (typeof dialog.showModal === 'function') {
+      try {
+        dialog.showModal();
+      } catch (e) {}
+    }
+  }
 }

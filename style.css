@@ -20,6 +20,15 @@
   --radius-lg: 18px;
   --radius-md: 12px;
   --radius-sm: 8px;
+  --in-oklab: ;
+  --in-oklch: ;
+}
+
+@supports (linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+    --in-oklch: in oklch;
+  }
 }
 
 /* --- Reset e Configurações Básicas --- */
@@ -103,9 +112,11 @@ body {
 }
 
 canvas#gameCanvas {
-  inline-size: min(100vw, calc(100dvh * 1000 / 600));
-  block-size: min(100dvh, calc(100vw * 600 / 1000));
-  aspect-ratio: 1000 / 600;
+  --canvas-w: 1000;
+  --canvas-h: 600;
+  inline-size: min(100vw, calc(100dvh * var(--canvas-w, 1000) / var(--canvas-h, 600)));
+  block-size: min(100dvh, calc(100vw * var(--canvas-h, 600) / var(--canvas-w, 1000)));
+  aspect-ratio: var(--canvas-w, 1000) / var(--canvas-h, 600);
   display: block;
   box-shadow:
     0 0 64px rgba(0, 0, 0, 0.85),
@@ -1080,11 +1091,11 @@ canvas#gameCanvas {
   text-overflow: ellipsis;
 }
 
-/* --- Navegação em Tiles (Loja / Inventário / Missões / Opções / Créditos) --- */
+/* --- Navegação em Tiles (Loja / Inventário / Carreira / Missões / Opções / Créditos) --- */
 .menu-nav-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: clamp(8px, 1.1vw, 13px);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(8px, 1.0vw, 12px);
   margin-block-end: clamp(12px, 1.8vh, 18px);
 }
 
@@ -1770,8 +1781,26 @@ canvas#gameCanvas {
 /* Resumo do Equipamento no Inventário */
 .equipped-summary-bar {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.category-helper-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  color: #e0f2fe;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.category-helper-banner .svg-icon {
+  flex: none;
+  color: #38bdf8;
 }
 
 .equipped-summary-chip {
@@ -2479,6 +2508,14 @@ canvas#gameCanvas {
   .pitch-choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .menu-nav-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .equipped-summary-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
@@ -2569,24 +2606,19 @@ canvas#gameCanvas {
 
 /* Cartinha principal */
 .futc-inner {
-  width: 148px;
-  background: linear-gradient(165deg,
+  width: 162px;
+  isolation: isolate;
+  background: linear-gradient(165deg var(--in-oklab),
     #fef9c3 0%,
     #fde68a 18%,
     #d97706 42%,
-    #92400e 60%,
-    #78350f 78%,
+    #92400e 65%,
     #451a03 100%
   );
-  border-radius: 10px 10px 4px 4px;
-  /* Clip path: ponta chanfrada no canto inferior direito */
-  clip-path: polygon(0 0, 100% 0, 100% 90%, 86% 100%, 0 100%);
-  border: 2.5px solid #fef9c3;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,0.5),
-    0 8px 32px rgba(0,0,0,0.7),
-    0 0 24px 2px rgba(251,191,36,0.42),
-    inset 0 0 12px rgba(254,249,195,0.14);
+  border-radius: 12px 12px 6px 6px;
+  clip-path: polygon(0 0, 100% 0, 100% 91%, 85% 100%, 0 100%);
+  border: 2.5px solid #fef08a;
+  box-shadow: inset 0 0 14px rgba(254, 249, 195, 0.16);
   padding: 10px 10px 14px;
   display: flex;
   flex-direction: column;
@@ -2594,6 +2626,81 @@ canvas#gameCanvas {
   gap: 5px;
   position: relative;
   overflow: hidden;
+}
+
+.fut-card {
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.72));
+}
+
+.futc-art-layer,
+.futc-scrim,
+.futc-frame-trim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.futc-art-layer {
+  z-index: 0;
+}
+
+.futc-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  display: block;
+}
+
+.futc-bg-img[hidden] {
+  display: none !important;
+}
+
+.futc-scrim {
+  z-index: 1;
+  opacity: 0;
+  background: linear-gradient(180deg,
+    rgba(5, 9, 20, 0.82) 0%,
+    rgba(5, 9, 20, 0.36) 24%,
+    rgba(5, 9, 20, 0.04) 44%,
+    rgba(5, 9, 20, 0.16) 60%,
+    rgba(5, 9, 20, 0.84) 80%,
+    rgba(5, 9, 20, 0.94) 100%
+  );
+}
+
+.fut-card.has-card-art .futc-scrim {
+  opacity: 1;
+}
+
+.futc-frame-trim {
+  z-index: 1;
+  inset: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 8px 8px 3px 3px;
+  clip-path: polygon(0 0, 100% 0, 100% 91%, 86% 100%, 0 100%);
+}
+
+.futc-top,
+.futc-avatar-wrap,
+.futc-name-band,
+.futc-divider,
+.futc-stats-grid,
+.futc-seal-band {
+  position: relative;
+  z-index: 2;
+}
+
+.fut-card.has-card-art .futc-avatar-wrap {
+  width: 52px;
+  height: 52px;
+  align-self: flex-end;
+  margin: 22px 2px 2px auto;
+}
+
+.fut-card.has-card-art .futc-avatar-canvas {
+  width: 100%;
+  height: 100%;
 }
 
 /* Brilho animado deslizante */
@@ -2604,8 +2711,10 @@ canvas#gameCanvas {
   left: -40%;
   width: 60%;
   height: 200%;
-  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.28) 50%, transparent 70%);
-  animation: futcShine 2.4s ease-in-out infinite;
+  z-index: 3;
+  mix-blend-mode: soft-light;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%);
+  animation: futcShine 2.6s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -2766,13 +2875,13 @@ canvas#gameCanvas {
 /* Layout da Tela de Carreira */
 .career-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 24px;
+  grid-template-columns: 276px 1fr;
+  gap: 26px;
   align-items: start;
   width: 100%;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 820px) {
   .career-layout {
     grid-template-columns: 1fr;
     justify-items: center;
@@ -2783,54 +2892,156 @@ canvas#gameCanvas {
   display: flex;
   justify-content: center;
   align-items: center;
-  perspective: 900px;
+  perspective: 1000px;
+  filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.72));
+}
+
+.card-showcase-theme-gold {
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.76)) drop-shadow(0 0 22px rgba(245, 158, 11, 0.42));
+}
+
+.card-showcase-theme-dino {
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.76)) drop-shadow(0 0 22px rgba(34, 197, 94, 0.38));
+}
+
+.card-showcase-theme-waifu {
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.76)) drop-shadow(0 0 22px rgba(244, 63, 94, 0.4));
+}
+
+.card-showcase-theme-isagi {
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.76)) drop-shadow(0 0 22px rgba(74, 222, 128, 0.42));
+}
+
+.card-showcase-theme-chigiri {
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.76)) drop-shadow(0 0 22px rgba(244, 63, 94, 0.48));
+}
+
+.card-showcase-theme-kurumi {
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.82)) drop-shadow(0 0 24px rgba(225, 29, 72, 0.56));
 }
 
 /* Cartinha Oficial no Modo Carreira */
 .career-fut-card {
-  width: 220px;
-  border-radius: 14px 14px 6px 6px;
-  clip-path: polygon(0 0, 100% 0, 100% 91%, 84% 100%, 0 100%);
+  width: 254px;
+  min-height: 372px;
+  border-radius: 16px 16px 8px 8px;
+  clip-path: polygon(0 0, 100% 0, 100% 91.5%, 83% 100%, 0 100%);
   position: relative;
-  box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.75),
-    0 0 28px rgba(0, 0, 0, 0.5);
-  transition: transform 0.28s ease, box-shadow 0.28s ease;
+  transition: transform 0.32s cubic-bezier(0.22, 0.85, 0.36, 1);
   user-select: none;
 }
 
 .career-fut-card:hover {
-  transform: translateY(-4px) rotateX(4deg);
+  transform: translateY(-6px) rotateX(5deg) rotateY(-3deg) scale(1.015);
 }
 
 .career-card-inner {
   width: 100%;
-  padding: 14px 14px 18px;
+  min-height: 368px;
+  padding: 15px 15px 18px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   position: relative;
+  isolation: isolate;
   overflow: hidden;
-  border-radius: 12px 12px 4px 4px;
+  border-radius: 14px 14px 6px 6px;
 }
 
-/* Efeito de brilho holográfico deslizante */
+.career-card-art,
+.career-card-scrim,
+.career-card-frame-trim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.career-card-art {
+  z-index: 0;
+  overflow: hidden;
+}
+
+.career-card-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+  display: block;
+  transition: transform 0.45s ease;
+}
+
+.career-fut-card:hover .career-card-bg-img {
+  transform: scale(1.045);
+}
+
+/* Sobreposição sutil apenas nas regiões de texto (topo e base), preservando o centro da arte */
+.career-card-scrim {
+  z-index: 1;
+  background: linear-gradient(180deg,
+    rgba(6, 10, 22, 0.84) 0%,
+    rgba(6, 10, 22, 0.46) 24%,
+    rgba(6, 10, 22, 0.04) 44%,
+    rgba(6, 10, 22, 0.08) 58%,
+    rgba(6, 10, 22, 0.80) 76%,
+    rgba(6, 10, 22, 0.94) 100%
+  );
+}
+
+.career-fut-card.is-gold-foil .career-card-scrim {
+  background: radial-gradient(circle at 50% 38%, rgba(254, 240, 138, 0.22) 0%, rgba(120, 53, 15, 0.12) 55%, rgba(69, 26, 3, 0.48) 100%);
+}
+
+/* Moldura interna dupla metálica chanfrada */
+.career-card-frame-trim {
+  z-index: 2;
+  inset: 5px;
+  border: 1.4px solid rgba(255, 255, 255, 0.34);
+  border-radius: 11px 11px 4px 4px;
+  clip-path: polygon(0 0, 100% 0, 100% 91.5%, 83% 100%, 0 100%);
+  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.12);
+}
+
+/* Textura geométrica / filigrana do tema Ouro Clássico */
+.gold-foil-pattern {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(254, 249, 195, 0.45) 0%, rgba(245, 158, 11, 0.14) 42%, transparent 72%),
+    repeating-linear-gradient(45deg, rgba(254, 240, 138, 0.11) 0 1px, transparent 1px 14px),
+    repeating-linear-gradient(-45deg, rgba(120, 53, 15, 0.16) 0 1px, transparent 1px 14px);
+}
+
+/* Brilho holográfico deslizante e glint no hover */
 .career-card-inner::before {
   content: '';
   position: absolute;
   top: -70%;
-  left: -50%;
-  width: 70%;
-  height: 220%;
-  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.32) 50%, transparent 75%);
-  animation: futcShine 3s ease-in-out infinite;
+  left: -60%;
+  width: 65%;
+  height: 240%;
+  z-index: 4;
+  mix-blend-mode: soft-light;
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.56) 50%, transparent 80%);
+  animation: futcShine 3.6s ease-in-out infinite;
   pointer-events: none;
+}
+
+.career-fut-card:hover .career-card-inner::before {
+  animation-duration: 1.6s;
+}
+
+.career-card-top,
+.career-card-hero,
+.career-card-footer-block {
+  position: relative;
+  z-index: 3;
+  width: 100%;
 }
 
 /* Topo: rating + posição + insígnia */
 .career-card-top {
-  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -2841,6 +3052,11 @@ canvas#gameCanvas {
   flex-direction: column;
   align-items: center;
   line-height: 1;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(5, 9, 20, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(4px);
 }
 
 .career-card-rating {
@@ -2848,16 +3064,16 @@ canvas#gameCanvas {
   font-size: 38px;
   font-weight: 900;
   color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
-  line-height: 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  line-height: 0.96;
 }
 
 .career-card-pos {
   font-family: 'Segoe UI', Arial, sans-serif;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.92);
-  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.94);
+  letter-spacing: 1.4px;
   margin-top: 2px;
 }
 
@@ -2865,44 +3081,83 @@ canvas#gameCanvas {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 3px;
 }
 
 .career-card-badge-icon {
-  font-size: 26px;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(5, 9, 20, 0.56);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.65));
 }
 
 .career-card-badge-label {
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: rgba(255, 255, 255, 0.88);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.9px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(5, 9, 20, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f8fafc;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
 
-/* Avatar do jogador */
+/* Centro da carta: aberto nas cartas ilustradas, emblema destaque na Ouro Clássico */
+.career-card-hero {
+  flex: 1;
+  min-height: 118px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .career-card-avatar-wrap {
   position: relative;
-  width: 110px;
-  height: 110px;
-  margin: 2px auto;
+  display: grid;
+  place-items: center;
+}
+
+.career-card-avatar-wrap.is-center-emblem {
+  width: 96px;
+  height: 96px;
+}
+
+.career-card-avatar-wrap.is-corner-emblem {
+  width: 58px;
+  height: 58px;
+  margin-left: auto;
+  margin-top: auto;
+  margin-bottom: 2px;
 }
 
 #career-avatar-canvas {
   display: block;
   border-radius: 50%;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.75);
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
 }
 
 .career-card-avatar-shine {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, transparent 60%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, transparent 58%);
   pointer-events: none;
+}
+
+.career-card-footer-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Nome */
@@ -2917,8 +3172,8 @@ canvas#gameCanvas {
   font-weight: 900;
   color: #fff;
   text-transform: uppercase;
-  letter-spacing: 2.2px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  letter-spacing: 2.4px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
   display: block;
   white-space: nowrap;
   overflow: hidden;
@@ -2926,18 +3181,21 @@ canvas#gameCanvas {
 }
 
 .career-card-divider {
-  width: 85%;
+  width: 88%;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.82), transparent);
 }
 
 /* Grid de Estatísticas Vitais (5 atributos oficiais) */
 .career-card-stats-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
+  gap: 3px;
   width: 100%;
-  padding: 2px 0;
+  padding: 4px 2px;
+  border-radius: 8px;
+  background: rgba(5, 9, 20, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .career-stat-cell {
@@ -2949,18 +3207,18 @@ canvas#gameCanvas {
 
 .career-stat-num {
   font-family: 'Segoe UI', Arial, sans-serif;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 900;
   color: #fff;
-  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.8);
   line-height: 1.1;
 }
 
 .career-stat-tag {
   font-family: 'Segoe UI', Arial, sans-serif;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.84);
   letter-spacing: 0.8px;
   text-transform: uppercase;
 }
@@ -2969,120 +3227,158 @@ canvas#gameCanvas {
 .career-card-seal-band {
   width: 100%;
   text-align: center;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .career-card-seal {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   font-family: 'Segoe UI', Arial, sans-serif;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 900;
   color: #fff;
-  letter-spacing: 1.8px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
-  opacity: 0.95;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 
 /* ==========================================================================
    OS 5 TEMAS VISUAIS DE CARTAS
    ========================================================================== */
 
-/* 1. TEMA OURO CLÁSSICO (Estilo FUT Metálico) */
+/* 1. TEMA OURO CLÁSSICO (Estilo Ouro Lendário / FUT Premium) */
 .card-theme-gold {
-  border: 2.8px solid #fef08a;
-  box-shadow: 0 0 24px rgba(234, 179, 8, 0.45);
+  border: 2.5px solid #fde047;
 }
 .card-theme-gold .career-card-inner,
 .card-theme-gold .futc-inner,
 .card-theme-gold.menu-item--card {
-  background: linear-gradient(165deg,
-    #fef9c3 0%,
-    #fde68a 18%,
-    #d97706 44%,
-    #92400e 65%,
-    #78350f 84%,
-    #451a03 100%
-  );
+  background:
+    radial-gradient(circle at 22% 14%, rgba(255, 255, 255, 0.42) 0%, transparent 45%),
+    linear-gradient(155deg var(--in-oklab),
+      #fef9c3 0%,
+      #fde047 16%,
+      #f59e0b 40%,
+      #b45309 66%,
+      #78350f 85%,
+      #451a03 100%
+    );
+}
+.card-theme-gold .career-card-frame-trim {
+  border-color: rgba(254, 240, 138, 0.72);
+  box-shadow: inset 0 0 14px rgba(254, 249, 195, 0.26);
+}
+.card-theme-gold .career-card-badge-icon {
+  color: #fde047;
+  border-color: rgba(253, 224, 71, 0.55);
 }
 
-/* 2. TEMA DINOSSAURO (Pré-Histórico / Escamas Verdes e Âmbar) */
+/* 2. TEMA DINOSSAURO (Pré-Histórico / Esmeralda e Âmbar) */
 .card-theme-dino {
-  border: 2.8px solid #86efac;
-  box-shadow: 0 0 24px rgba(34, 197, 94, 0.45);
+  border: 2.5px solid #4ade80;
 }
 .card-theme-dino .career-card-inner,
 .card-theme-dino .futc-inner,
 .card-theme-dino.menu-item--card {
   background:
-    radial-gradient(circle at 80% 20%, rgba(245, 158, 11, 0.3) 0%, transparent 50%),
-    linear-gradient(165deg,
+    radial-gradient(circle at 80% 20%, rgba(245, 158, 11, 0.26) 0%, transparent 50%),
+    linear-gradient(165deg var(--in-oklab),
       #bbf7d0 0%,
-      #4ade80 20%,
-      #16a34a 45%,
-      #166534 68%,
-      #14532d 86%,
+      #22c55e 22%,
+      #166534 62%,
       #052e16 100%
     );
+}
+.card-theme-dino .career-card-badge-icon {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.5);
 }
 
 /* 3. TEMA ANIME WAIFU (Kawaii / Rosa Pastel e Brilhante) */
 .card-theme-waifu {
-  border: 2.8px solid #fbcfe8;
-  box-shadow: 0 0 24px rgba(244, 63, 94, 0.45);
+  border: 2.5px solid #f9a8d4;
 }
 .card-theme-waifu .career-card-inner,
 .card-theme-waifu .futc-inner,
 .card-theme-waifu.menu-item--card {
   background:
-    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.45) 0%, transparent 40%),
-    linear-gradient(165deg,
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.4) 0%, transparent 45%),
+    linear-gradient(165deg var(--in-oklab),
       #fdf2f8 0%,
-      #fce7f3 22%,
-      #f472b6 48%,
-      #db2777 72%,
-      #9d174d 88%,
+      #f472b6 36%,
+      #db2777 70%,
       #700733 100%
     );
+}
+.card-theme-waifu .career-card-badge-icon {
+  color: #fbcfe8;
+  border-color: rgba(251, 207, 232, 0.55);
 }
 
 /* 4. TEMA YOICHI ISAGI (Cibernético / Quebra-Cabeça / Verde Fluorescente) */
 .card-theme-isagi {
-  border: 2.8px solid #4ade80;
-  box-shadow: 0 0 26px rgba(74, 222, 128, 0.5);
+  border: 2.5px solid #34d399;
 }
 .card-theme-isagi .career-card-inner,
 .card-theme-isagi .futc-inner,
 .card-theme-isagi.menu-item--card {
   background:
-    radial-gradient(circle at 75% 30%, rgba(56, 189, 248, 0.32) 0%, transparent 50%),
-    linear-gradient(165deg,
+    radial-gradient(circle at 75% 30%, rgba(56, 189, 248, 0.28) 0%, transparent 50%),
+    linear-gradient(165deg var(--in-oklab),
       #dcfce7 0%,
-      #86efac 16%,
-      #10b981 42%,
-      #047857 66%,
-      #064e3b 84%,
+      #10b981 36%,
+      #047857 68%,
       #022c22 100%
     );
 }
+.card-theme-isagi .career-card-badge-icon {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.55);
+}
 
-/* 5. TEMA HYOMA CHIGIRI (Pantera Vermelha / Rosa-Choque e Faíscas Rubi) */
+/* 5. TEMA HYOMA CHIGIRI (Pantera Vermelha / Rubi Incandescente) */
 .card-theme-chigiri {
-  border: 2.8px solid #fda4af;
-  box-shadow: 0 0 26px rgba(244, 63, 94, 0.55);
+  border: 2.5px solid #fb7185;
 }
 .card-theme-chigiri .career-card-inner,
 .card-theme-chigiri .futc-inner,
 .card-theme-chigiri.menu-item--card {
   background:
-    radial-gradient(circle at 25% 20%, rgba(251, 113, 133, 0.4) 0%, transparent 50%),
-    linear-gradient(165deg,
+    radial-gradient(circle at 25% 20%, rgba(251, 113, 133, 0.35) 0%, transparent 50%),
+    linear-gradient(165deg var(--in-oklab),
       #ffe4e6 0%,
-      #fb7185 20%,
-      #e11d48 46%,
+      #f43f5e 34%,
       #9f1239 70%,
-      #881337 86%,
       #4c0519 100%
     );
+}
+.card-theme-chigiri .career-card-badge-icon {
+  color: #fda4af;
+  border-color: rgba(253, 164, 175, 0.55);
+}
+
+/* 6. TEMA KURUMI TOKISAKI (Relógio Carmesim / Dourado Imperial) */
+.card-theme-kurumi {
+  border: 2.5px solid #f43f5e;
+}
+.card-theme-kurumi .career-card-inner,
+.card-theme-kurumi .futc-inner,
+.card-theme-kurumi.menu-item--card {
+  background:
+    radial-gradient(circle at 72% 24%, rgba(251, 191, 36, 0.28) 0%, transparent 48%),
+    linear-gradient(165deg var(--in-oklab),
+      #ffe4e6 0%,
+      #be123c 36%,
+      #7f1d1d 70%,
+      #16070d 100%
+    );
+}
+.card-theme-kurumi .career-card-badge-icon {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.65);
 }
 
 /* Painel de Detalhes da Carreira */
@@ -3093,9 +3389,9 @@ canvas#gameCanvas {
 }
 
 .career-metrics-card {
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(56, 189, 248, 0.22);
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-radius: 14px;
   padding: 18px 20px;
 }
 
@@ -3108,27 +3404,41 @@ canvas#gameCanvas {
 
 .career-stat-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 10px;
 }
 
 .career-metric-tile {
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  padding: 11px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .career-metric-tile.highlight-save {
-  border-color: rgba(56, 189, 248, 0.4);
-  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(14, 165, 233, 0.14);
 }
 
 .tile-icon {
-  font-size: 22px;
+  inline-size: 38px;
+  block-size: 38px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: rgba(14, 165, 233, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  color: #7dd3fc;
+}
+
+.career-metric-tile.highlight-save .tile-icon {
+  background: rgba(56, 189, 248, 0.24);
+  color: #e0f2fe;
 }
 
 .tile-info small {
@@ -3147,9 +3457,9 @@ canvas#gameCanvas {
 
 /* Seletor de Deck / Coleção de Cards */
 .career-deck-selector {
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(56, 189, 248, 0.22);
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-radius: 14px;
   padding: 16px 20px;
 }
 
@@ -3157,6 +3467,8 @@ canvas#gameCanvas {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
@@ -3168,23 +3480,21 @@ canvas#gameCanvas {
 
 .career-deck-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   gap: 12px;
 }
 
 .career-deck-item {
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 105px;
-  transition: transform 0.2s ease;
+  position: relative;
+  border-radius: 12px;
+  min-height: 122px;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .career-deck-item:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
 .career-deck-item.is-equipped {
@@ -3192,28 +3502,81 @@ canvas#gameCanvas {
   outline-offset: 2px;
 }
 
+.career-deck-item.is-locked {
+  opacity: 0.86;
+}
+
+.deck-item-art,
+.deck-item-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.deck-item-art {
+  z-index: 0;
+}
+
+.deck-item-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  display: block;
+}
+
+.deck-item-scrim {
+  z-index: 1;
+  background: linear-gradient(180deg,
+    rgba(5, 9, 20, 0.78) 0%,
+    rgba(5, 9, 20, 0.25) 45%,
+    rgba(5, 9, 20, 0.88) 100%
+  );
+}
+
+.career-deck-item.is-gold-foil .deck-item-scrim {
+  background: linear-gradient(180deg, rgba(69, 26, 3, 0.35), rgba(69, 26, 3, 0.65));
+}
+
+.deck-item-content {
+  position: relative;
+  z-index: 2;
+  padding: 12px;
+  min-height: 122px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .deck-item-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
 }
 
 .deck-badge {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.7));
 }
 
 .deck-rarity {
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
 
 .deck-name {
   font-size: 13px;
   color: #fff;
   font-weight: 800;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.88);
 }
 
 .deck-actions {
@@ -3226,7 +3589,7 @@ canvas#gameCanvas {
   color: #fff;
   font-size: 10px;
   font-weight: 800;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 12px;
 }
 
@@ -3235,12 +3598,488 @@ canvas#gameCanvas {
   padding: 4px 10px;
 }
 
-/* Cards na Loja e Inventário */
+/* Cards na Loja e Inventário com imagem/arte em destaque */
+.menu-item--card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.menu-card-art-layer,
+.menu-card-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.menu-card-art-layer {
+  z-index: 0;
+}
+
+.menu-card-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  display: block;
+  transition: transform 0.35s ease;
+}
+
+.menu-item--card:hover .menu-card-bg-img {
+  transform: scale(1.04);
+}
+
+.menu-card-scrim {
+  z-index: 1;
+  background: linear-gradient(180deg,
+    rgba(6, 10, 22, 0.84) 0%,
+    rgba(6, 10, 22, 0.52) 42%,
+    rgba(6, 10, 22, 0.90) 100%
+  );
+}
+
+.menu-item--card.is-gold-foil .menu-card-scrim {
+  background: linear-gradient(180deg,
+    rgba(69, 26, 3, 0.42) 0%,
+    rgba(69, 26, 3, 0.25) 45%,
+    rgba(40, 15, 2, 0.78) 100%
+  );
+}
+
+.menu-item--card .item-card-top,
+.menu-item--card .item-title,
+.menu-item--card .item-body,
+.menu-item--card .item-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.menu-item--card .item-body p,
+.menu-item--card .item-meta {
+  color: rgba(241, 245, 249, 0.92);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+}
+
 .item-icon-card {
-  font-size: 22px;
+  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+  color: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* ==========================================================================
+   BOTÃO JOGAR ÚNICO, MODAIS NATIVOS (<dialog>), PERFIL & FOTOS DE PERFIL
+   ========================================================================== */
+
+.play-cta-wrap {
+  display: flex;
+  justify-content: center;
+  margin-block: 6px 14px;
+}
+
+.play-hero-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-inline-size: min(360px, 100%);
+  padding: 15px 30px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(56, 189, 248, 0.58);
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 55%, #1d4ed8 100%);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow:
+    0 12px 28px rgba(37, 99, 235, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+
+.play-hero-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow:
+    0 16px 34px rgba(56, 189, 248, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.play-hero-btn:active {
+  transform: translateY(0);
+}
+
+.play-hero-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  line-height: 1.15;
+}
+
+.play-hero-text strong {
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+}
+
+.play-hero-text small {
+  font-size: 0.78rem;
+  color: rgba(224, 242, 254, 0.9);
+  font-weight: 500;
+}
+
+/* Native <dialog> — NEVER set display on bare dialog selector */
+dialog.cyber-dialog:modal {
+  margin: auto;
+  width: min(760px, calc(100vw - 24px));
+  max-height: min(88dvh, 760px);
+  padding: 0;
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  border-radius: 18px;
+  background: linear-gradient(165deg, rgba(10, 17, 34, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  color: #f8fafc;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(56, 189, 248, 0.16);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+dialog.cyber-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.76);
+  backdrop-filter: blur(5px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.cyber-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px 22px;
+}
+
+.cyber-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cyber-dialog-title {
+  margin: 6px 0 4px;
+  font-size: 1.35rem;
+  color: #f8fafc;
+}
+
+.cyber-dialog-sub {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.cyber-dialog-close {
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: 10px;
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cyber-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.setup-fieldset {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  margin: 0;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.setup-legend {
+  padding: 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
+
+.play-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .play-mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.setup-mode-card {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.setup-mode-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.setup-mode-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  height: 100%;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.85);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.setup-mode-body strong {
+  font-size: 0.95rem;
+  color: #f8fafc;
+}
+
+.setup-mode-body small {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+
+.setup-mode-card input:checked + .setup-mode-body {
+  border-color: #38bdf8;
+  background: rgba(14, 165, 233, 0.16);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+}
+
+.setup-mode-card input:focus-visible + .setup-mode-body {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
+
+/* Perfil de Atleta, Posição, Nacionalidade & Fotos de Perfil */
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.profile-full-span {
+  grid-column: 1 / -1;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-field label,
+.profile-field-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.profile-field input[type="text"],
+.profile-field select {
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(2, 6, 23, 0.72);
+  color: #f8fafc;
+  font-size: 0.92rem;
+}
+
+.nat-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nat-select-wrap select {
+  flex: 1;
+}
+
+.nat-flag-svg {
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  flex-shrink: 0;
+}
+
+.position-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pos-pill-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.82);
+  cursor: pointer;
+  color: #e2e8f0;
+  font-size: 0.82rem;
+}
+
+.pos-pill-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pos-pill-option.active {
+  border-color: #38bdf8;
+  background: rgba(14, 165, 233, 0.2);
+  color: #ffffff;
+}
+
+.profile-avatar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.avatar-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.avatar-picker-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+  font-size: 0.76rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.avatar-picker-btn.active {
+  border-color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.avatar-picker-img,
+.item-avatar-img,
+.summary-pfp-img,
+.career-card-pfp-img,
+.futc-pfp-img {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+}
+
+.avatar-picker-img,
+.item-avatar-img {
+  width: 44px;
+  height: 44px;
+}
+
+.summary-pfp-img {
+  width: 28px;
+  height: 28px;
+}
+
+.pfp-default-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.28), rgba(15, 23, 42, 0.92));
+  border: 1.5px solid rgba(56, 189, 248, 0.65);
+  color: #7dd3fc;
+}
+
+.item-icon-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.career-card-nat,
+.futc-nat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.career-card-pfp-box {
+  width: 86px;
+  height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.45));
+  padding: 3px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.career-card-pfp-img {
+  width: 80px;
+  height: 80px;
+}
+
+.futc-pfp-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.futc-pfp-img {
+  width: 56px;
+  height: 56px;
+}
+
+.remap-status {
+  margin: 8px 0 0;
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  color: #4ade80;
+}
+
+.profile-picker-hint {
+  font-size: 0.76rem;
+  color: #94a3b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .career-card-inner::before,
+  .futc-inner::before {
+    animation: none;
+  }
 }

@@ -19,8 +19,6 @@ const finalScoreP1El = document.getElementById('final-score-p1');
 const finalScoreP2El = document.getElementById('final-score-p2');
 const finalBadgeP1 = document.getElementById('final-badge-p1');
 
-const startBtn = document.getElementById('start-btn');
-const twoVtwoStartBtn = document.getElementById('start-2v2-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
 const btnMenu = document.getElementById('btn-menu');
 const btnPass = document.getElementById('btn-pass');
@@ -32,14 +30,103 @@ const timerEl = document.getElementById('hud-timer');
 const goalBanner = document.getElementById('goal-banner');
 const badgeP1 = document.getElementById('badge-p1');
 
-// Instanciação das Entidades
-const player1 = new Player(260, 300, 22, playerConfig.color, playerConfig.number, true);
-const player2 = new Player(740, 300, 22, '#e53935', 10, false);
-const homeMate = new Player(390, 220, 20, playerConfig.color, 7, false);
-homeMate.isTeammate = true;
-const awayMate = new Player(810, 380, 20, '#f15b5b', 9, false);
-awayMate.isAwayMate = true;
+const TEAM_SIZE_BY_MODE = {
+  training: 1,
+  match: 1,
+  '2v2': 2,
+  '3v3': 3,
+  '4v4': 4,
+  '5v5': 5
+};
+
+function normalizeGameMode(mode) {
+  return Object.prototype.hasOwnProperty.call(TEAM_SIZE_BY_MODE, mode) ? mode : 'match';
+}
+
+function getTeamSize(mode = gameMode) {
+  return TEAM_SIZE_BY_MODE[normalizeGameMode(mode)] || 1;
+}
+
+function isTeamMode(mode = gameMode) {
+  return mode !== 'training' && getTeamSize(mode) >= 2;
+}
+
+function isOfficialMatchMode(mode = gameMode) {
+  return normalizeGameMode(mode) !== 'training';
+}
+
+// Instanciação dinâmica do elenco (até 5v5) preservando player1, homeMate, player2, awayMate
+const HOME_SLOT_NUMBERS = [10, 7, 8, 5, 1];
+const AWAY_SLOT_NUMBERS = [10, 9, 11, 4, 1];
+
+const homePool = HOME_SLOT_NUMBERS.map((num, idx) => {
+  const actor = new Player(
+    260 - idx * 25,
+    300 + (idx % 2 === 0 ? 0 : idx * 35),
+    22,
+    playerConfig.color,
+    idx === 0 ? playerConfig.number : num,
+    idx === 0
+  );
+  actor.aiRoleSlot = idx;
+  if (idx > 0) actor.isTeammate = true;
+  return actor;
+});
+
+const awayPool = AWAY_SLOT_NUMBERS.map((num, idx) => {
+  const color = idx === 0 ? '#e53935' : '#f15b5b';
+  const actor = new Player(
+    740 + idx * 25,
+    300 - (idx % 2 === 0 ? 0 : idx * 35),
+    22,
+    color,
+    num,
+    false
+  );
+  actor.aiRoleSlot = idx;
+  if (idx > 0) actor.isAwayMate = true;
+  return actor;
+});
+
+const player1 = homePool[0];
+const homeMate = homePool[1];
+const player2 = awayPool[0];
+const awayMate = awayPool[1];
 const ball = new Ball(CONFIG.pitch.centerX, CONFIG.pitch.centerY, 9.5);
+
+function getActiveHomePlayers() {
+  if (gameMode === 'training') return [player1, homeMate];
+  return homePool.slice(0, getTeamSize(gameMode));
+}
+
+function getActiveAwayPlayers() {
+  if (gameMode === 'training') return [player2];
+  return awayPool.slice(0, getTeamSize(gameMode));
+}
+
+function getAllActivePlayers() {
+  return [...getActiveHomePlayers(), ...getActiveAwayPlayers()];
+}
+
+function getTeammatesOf(actor) {
+  const home = getActiveHomePlayers();
+  if (home.includes(actor)) return home;
+  const away = getActiveAwayPlayers();
+  if (away.includes(actor)) return away;
+  return actor && (actor.isHuman || actor.isTeammate) ? [player1] : [player2];
+}
+
+function getOpponentsOf(actor) {
+  const isHome = actor && (actor.isHuman || actor.isTeammate);
+  return isHome ? getActiveAwayPlayers() : getActiveHomePlayers();
+}
+
+function syncHomeTeamAppearance() {
+  for (let i = 0; i < homePool.length; i++) {
+    homePool[i].color = playerConfig.color;
+  }
+  player1.number = playerConfig.number;
+}
 
 // 4 postes (esquerdo topo, esquerdo base, direito topo, direito base)
 const posts = [
@@ -50,17 +137,48 @@ const posts = [
 ];
 
 function setPitchLayout(mode = 'match') {
-  const layout = PITCH_LAYOUTS[mode === '2v2' ? '2v2' : 'match'];
+  const normalized = normalizeGameMode(mode);
+  const layout = PITCH_LAYOUTS[normalized] || PITCH_LAYOUTS.match;
   const p = CONFIG.pitch;
   const g = CONFIG.goals;
 
-  homeMate.radius = mode === '2v2' ? 22 : 20;
-  awayMate.radius = mode === '2v2' ? 22 : 20;
+  CONFIG.canvasWidth = layout.canvasWidth;
+  CONFIG.canvasHeight = layout.canvasHeight;
+  canvas.width = layout.canvasWidth;
+  canvas.height = layout.canvasHeight;
+  canvas.style.setProperty('--canvas-w', String(layout.canvasWidth));
+  canvas.style.setProperty('--canvas-h', String(layout.canvasHeight));
+
+  const size = getTeamSize(normalized);
+  const playerRadius = size >= 5 ? 18 : size === 4 ? 19 : size === 3 ? 21 : 22;
+  const gkSlotRadius = size >= 5 ? 16.5 : size === 4 ? 17.5 : size === 3 ? 18.5 : playerRadius;
+  for (let i = 0; i < homePool.length; i++) {
+    const actor = homePool[i];
+    if (actor === homeMate && size === 1) actor.radius = 20;
+    else if (size >= 3 && i === size - 1) actor.radius = gkSlotRadius;
+    else actor.radius = playerRadius;
+  }
+  for (let i = 0; i < awayPool.length; i++) {
+    const actor = awayPool[i];
+    if (actor === awayMate && size === 1) actor.radius = 20;
+    else if (size >= 3 && i === size - 1) actor.radius = gkSlotRadius;
+    else actor.radius = playerRadius;
+  }
 
   p.left = layout.left;
   p.right = layout.right;
   p.top = layout.top;
   p.bottom = layout.bottom;
+  p.centerRadius = layout.centerRadius;
+  p.penaltyWidth = layout.penaltyWidth;
+  p.penaltyHeight = layout.penaltyHeight;
+  p.goalAreaWidth = layout.goalAreaWidth;
+  p.goalAreaHeight = layout.goalAreaHeight;
+
+  CONFIG.stadium.minX = 36;
+  CONFIG.stadium.maxX = layout.canvasWidth - 36;
+  CONFIG.stadium.minY = 20;
+  CONFIG.stadium.maxY = layout.canvasHeight - 20;
 
   const center = (p.top + p.bottom) / 2;
   g.topY = center - layout.goalHeight / 2;
@@ -121,29 +239,35 @@ const MatchRating = {
   GOAL_RATINGS:  [0, 7.5, 8.5, 10.0],  // 1º gol → 7.5, 2º → 8.5, 3º+ → 10.0
   ASSIST_RATINGS: [0, 7.0, 8.0, 9.0],   // 1ª assist → 7.0, 2ª → 8.0, 3ª+ → 9.0
 
-  /* Inicializa as estatísticas dos jogadores no início de cada partida */
-  reset() {
-    const makeStats = () => ({
+  _makeStats() {
+    return {
       rating: this.BASE,
       goals: 0,
       assists: 0,
       shots: 0,
       tackles: 0,
       passes: 0
-    });
-    this.p1 = makeStats();
-    this.p2 = makeStats();
-    this.mate = makeStats();
-    this.awayMate = makeStats();
+    };
+  },
+
+  /* Inicializa as estatísticas dos jogadores no início de cada partida */
+  reset() {
+    this.map = new Map();
+    for (const actor of [...homePool, ...awayPool]) {
+      this.map.set(actor, this._makeStats());
+    }
+    this.p1 = this.map.get(player1);
+    this.p2 = this.map.get(player2);
+    this.mate = this.map.get(homeMate);
+    this.awayMate = this.map.get(awayMate);
   },
 
   /** Retorna o objeto de stats de um actor */
   statsFor(actor) {
-    if (actor === player1)   return this.p1;
-    if (actor === player2)   return this.p2;
-    if (actor === homeMate)  return this.mate;
-    if (actor === awayMate)  return this.awayMate;
-    return null;
+    if (!actor) return null;
+    if (!this.map) this.reset();
+    if (!this.map.has(actor)) this.map.set(actor, this._makeStats());
+    return this.map.get(actor);
   },
 
   /** Registra um gol marcado */
@@ -205,19 +329,25 @@ MatchRating.reset();
 
 /* Posição tática do jogador (para o FUT Card) */
 function playerPosition(actor) {
-  if (actor === player1 || actor === homeMate) {
-    if (gameMode === '2v2') return actor === player1 ? 'ATA' : 'MEI';
-    return 'ATA';
+  if (actor === player1) return (playerConfig && playerConfig.position) ? playerConfig.position : 'ATA';
+  const slot = actor && Number.isInteger(actor.aiRoleSlot) ? actor.aiRoleSlot : 0;
+  const teamPositions = ['ATA', 'MEI', 'ALA', 'ZAG', 'GOL'];
+  if (actor && (actor.isHuman || actor.isTeammate)) {
+    return isTeamMode() ? (teamPositions[slot] || 'MEI') : 'ATA';
   }
-  return gameMode === '2v2' ? (actor === player2 ? 'ATA' : 'ZAG') : 'BOT';
+  return isTeamMode() ? (teamPositions[slot] || 'ZAG') : 'BOT';
 }
 
 /* Nome do jogador para o card */
 function playerDisplayName(actor) {
-  if (actor === player1) return (playerConfig?.name || 'LITO').toUpperCase().slice(0, 10);
-  if (actor === homeMate) return 'PARCEIRO';
-  if (actor === awayMate) return 'RIVAL';
-  return 'BOT';
+  if (actor === player1) return (playerConfig?.name || 'LITO').toUpperCase().slice(0, 12);
+  const slot = actor && Number.isInteger(actor.aiRoleSlot) ? actor.aiRoleSlot : 0;
+  if (actor && actor.isTeammate) {
+    const mateNames = ['PARCEIRO', 'ALA AZUL', 'ZAGUEIRO', 'GOLEIRO'];
+    return mateNames[Math.max(0, slot - 1)] || `ALIADO #${slot + 1}`;
+  }
+  if (actor === player2) return 'RIVAL #1';
+  return `RIVAL #${slot + 1}`;
 }
 
 function newTwoVtwoStats() {
@@ -387,6 +517,18 @@ function showFutCard(actor, scoringTeam) {
   el.querySelector('.futc-seal').textContent = stats && stats.goals >= 3 ? 'HAT-TRICK' :
     stats && stats.goals >= 2 ? 'BICAMPEÃO' : isPlayerTeam ? 'HOMEM DO JOGO' : 'ARTILHEIRO';
 
+  const natEl = document.getElementById('futc-nat-badge');
+  if (natEl) {
+    if (actor === player1 && typeof renderNationalityFlagSvg === 'function') {
+      const natCode = playerConfig?.nationality || 'BR';
+      natEl.innerHTML = `${renderNationalityFlagSvg(natCode, 18, 12)}<span>${natCode}</span>`;
+      natEl.hidden = false;
+    } else {
+      natEl.innerHTML = '';
+      natEl.hidden = true;
+    }
+  }
+
   // Estatísticas do bloco inferior
   el.querySelector('[data-stat="gol"]').textContent  = stats ? stats.goals : 0;
   el.querySelector('[data-stat="ast"]').textContent  = stats ? stats.assists : 0;
@@ -395,9 +537,21 @@ function showFutCard(actor, scoringTeam) {
   el.querySelector('[data-stat="pas"]').textContent  = stats ? stats.passes : 0;
   el.querySelector('[data-stat="nota"]').textContent = rating;
 
-  // Mini-avatar do botão desenhado em canvas
+  // Mini-avatar do botão desenhado em canvas + Foto de perfil equipada
+  const pfpSlot = document.getElementById('futc-pfp-slot');
   const avatarCanvas = el.querySelector('.futc-avatar-canvas');
+  const showCustomPfp = actor === player1 && typeof renderAvatarMediaHtml === 'function' && profile && profile.equippedAvatar && profile.equippedAvatar !== 'pfp_default';
+  if (pfpSlot) {
+    if (showCustomPfp) {
+      pfpSlot.innerHTML = renderAvatarMediaHtml(profile.equippedAvatar, 'futc-pfp-img', 48);
+      pfpSlot.hidden = false;
+    } else {
+      pfpSlot.innerHTML = '';
+      pfpSlot.hidden = true;
+    }
+  }
   if (avatarCanvas) {
+    avatarCanvas.hidden = !!showCustomPfp;
     const actx = avatarCanvas.getContext('2d');
     const cx = avatarCanvas.width / 2;
     const cy = avatarCanvas.height / 2;
@@ -438,14 +592,26 @@ function showFutCard(actor, scoringTeam) {
   el.style.setProperty('--futc-team-color', color);
   el.style.setProperty('--futc-shine', isPlayerTeam ? '#fef3c7' : '#fee2e2');
 
-  // Aplica tema visual da cartinha (se o jogador tiver equipado uma carta colecionável)
-  el.classList.remove('card-theme-gold', 'card-theme-dino', 'card-theme-waifu', 'card-theme-isagi', 'card-theme-chigiri');
+  // Aplica tema visual e arte da cartinha (se o jogador tiver equipado uma carta colecionável)
+  el.classList.remove('card-theme-gold', 'card-theme-dino', 'card-theme-waifu', 'card-theme-isagi', 'card-theme-chigiri', 'card-theme-kurumi', 'has-card-art');
+  const cardsList = (typeof ITEMS !== 'undefined' && ITEMS.cards) ? ITEMS.cards : [];
+  let activeCardDef = cardsList.find(c => c.id === 'card_gold') || cardsList[0] || null;
   if (isPlayerTeam && actor === player1 && profile && profile.equippedCard) {
-    const cardDef = (CONFIG.ITEMS && CONFIG.ITEMS.cards) ? CONFIG.ITEMS.cards.find(c => c.id === profile.equippedCard) : null;
-    const theme = (cardDef && cardDef.theme) ? cardDef.theme : 'gold';
-    el.classList.add(`card-theme-${theme}`);
-  } else {
-    el.classList.add('card-theme-gold');
+    activeCardDef = cardsList.find(c => c.id === profile.equippedCard) || activeCardDef;
+  }
+  const theme = (activeCardDef && activeCardDef.theme) ? activeCardDef.theme : 'gold';
+  el.classList.add(`card-theme-${theme}`);
+
+  const bgImg = el.querySelector('.futc-bg-img');
+  if (bgImg) {
+    if (activeCardDef && activeCardDef.image) {
+      bgImg.src = activeCardDef.image;
+      bgImg.hidden = false;
+      el.classList.add('has-card-art');
+    } else {
+      bgImg.removeAttribute('src');
+      bgImg.hidden = true;
+    }
   }
 
   // Exibe com animação
@@ -505,21 +671,21 @@ function handleGoal(scoringTeam) {
     goalBanner.textContent = 'GOOOOL!';
     if (typeof MISSIONS !== 'undefined') MISSIONS.recordGoal(gameMode);
 
-    // O autor é quem chutou por último no time 1
-    goalScorer = isBallControlledBy(player1) ? player1 :
-                 (gameMode === '2v2' && isBallControlledBy(homeMate)) ? homeMate : player1;
-    // Assistência: vem do passe da visão se player1 recebeu de homeMate
-    if (ball.passSource && ball.passSource !== goalScorer && (ball.passSource === player1 || ball.passSource === homeMate)) {
+    const homePlayers = getActiveHomePlayers();
+    const controlledHome = homePlayers.find(a => isBallControlledBy(a));
+    goalScorer = controlledHome || ((ball.lastTouchActor && homePlayers.includes(ball.lastTouchActor)) ? ball.lastTouchActor : player1);
+    if (ball.passSource && ball.passSource !== goalScorer && homePlayers.includes(ball.passSource)) {
       assistProvider = ball.passSource;
     }
   } else {
     gameState.scoreP2++;
     scoreP2El.textContent = gameState.scoreP2;
     goalBanner.style.color = '#f87171';
-    goalBanner.textContent = gameMode === '2v2' ? 'GOL ADVERSÁRIO!' : 'GOL DO BOT!';
+    goalBanner.textContent = isTeamMode() ? 'GOL ADVERSÁRIO!' : 'GOL DO BOT!';
 
-    goalScorer = isBallControlledBy(player2) ? player2 :
-                 (gameMode === '2v2' && isBallControlledBy(awayMate)) ? awayMate : player2;
+    const awayPlayers = getActiveAwayPlayers();
+    const controlledAway = awayPlayers.find(a => isBallControlledBy(a));
+    goalScorer = controlledAway || ((ball.lastTouchActor && awayPlayers.includes(ball.lastTouchActor)) ? ball.lastTouchActor : player2);
   }
 
   // Atualiza notas e carreira
@@ -536,10 +702,10 @@ function handleGoal(scoringTeam) {
     }
   }
 
-  if (gameMode === '2v2' && scoringTeam === 'p1' && twoVtwoStats?.goalAssistPending) {
+  if (isTeamMode() && scoringTeam === 'p1' && twoVtwoStats?.goalAssistPending) {
     twoVtwoStats.completed.goalAfterMatePass = true;
   }
-  if (gameMode === '2v2' && twoVtwoStats) {
+  if (isTeamMode() && twoVtwoStats) {
     twoVtwoStats.goalAssistPending = false;
   }
 
@@ -554,7 +720,7 @@ function handleGoal(scoringTeam) {
   if (goalScorer) showFutCard(goalScorer, scoringTeam);
 
   if (endGameTimerId) clearTimeout(endGameTimerId);
-  if (gameMode === '2v2' && gameState.isOvertime) {
+  if (isTeamMode() && gameState.isOvertime) {
     gameState.pendingGoalCountdown = false;
     endGameTimerId = setTimeout(() => endGame(scoringTeam === 'p1' ? 'p1_golden_goal' : 'p2_golden_goal'), 1200);
   } else if (gameState.scoreP1 >= CONFIG.rules.goalsToWin || gameState.scoreP2 >= CONFIG.rules.goalsToWin) {
@@ -594,9 +760,11 @@ function endGame(reason) {
   finalScoreP1El.textContent = gameState.scoreP1;
   finalScoreP2El.textContent = gameState.scoreP2;
   finalBadgeP1.style.backgroundColor = playerConfig.color;
+  const teamMode = isTeamMode();
+  const teamNoun = getTeamSize() === 2 ? 'dupla' : 'equipe';
   const finalTeamNames = document.querySelectorAll('.final-team-name');
-  finalTeamNames[0].textContent = gameMode === '2v2' ? 'Você + Parceiro' : 'Você';
-  finalTeamNames[1].textContent = gameMode === '2v2' ? 'Dupla adversária' : 'Bot';
+  finalTeamNames[0].textContent = teamMode ? (getTeamSize() === 2 ? 'Você + Parceiro' : `Time Azul (${gameMode})`) : 'Você';
+  finalTeamNames[1].textContent = teamMode ? (getTeamSize() === 2 ? 'Dupla adversária' : `Time Vermelho (${gameMode})`) : 'Bot';
 
   let outcome;
   if (reason === 'p1_win_5_goals' || reason === 'p1_golden_goal') {
@@ -604,49 +772,49 @@ function endGame(reason) {
     gameOverTitle.textContent = 'VITÓRIA ÉPICA!';
     gameOverTitle.style.color = '#4ade80';
     gameOverReason.textContent = reason === 'p1_golden_goal'
-      ? 'Sua dupla marcou o gol de ouro e venceu!'
-      : gameMode === '2v2'
-        ? `Sua dupla atingiu ${CONFIG.rules.goalsToWin} gols primeiro e conquistou a partida!`
+      ? `Sua ${teamNoun} marcou o gol de ouro e venceu!`
+      : teamMode
+        ? `Sua ${teamNoun} atingiu ${CONFIG.rules.goalsToWin} gols primeiro e conquistou a partida!`
         : `Você atingiu ${CONFIG.rules.goalsToWin} gols primeiro e conquistou a partida!`;
   } else if (reason === 'p2_win_5_goals' || reason === 'p2_golden_goal') {
     outcome = 'loss';
     gameOverTitle.textContent = 'DERROTA!';
     gameOverTitle.style.color = '#f87171';
     gameOverReason.textContent = reason === 'p2_golden_goal'
-      ? 'A dupla adversária marcou o gol de ouro.'
-      : gameMode === '2v2'
-        ? `A dupla adversária atingiu ${CONFIG.rules.goalsToWin} gols primeiro.`
+      ? `A ${teamNoun} adversária marcou o gol de ouro.`
+      : teamMode
+        ? `A ${teamNoun} adversária atingiu ${CONFIG.rules.goalsToWin} gols primeiro.`
         : `O Bot Vermelho atingiu ${CONFIG.rules.goalsToWin} gols primeiro.`;
   } else {
     if (gameState.scoreP1 > gameState.scoreP2) {
       outcome = 'win';
       gameOverTitle.textContent = 'VITÓRIA!';
       gameOverTitle.style.color = '#4ade80';
-      gameOverReason.textContent = gameMode === '2v2'
-        ? 'Sua dupla venceu a partida!'
+      gameOverReason.textContent = teamMode
+        ? `Sua ${teamNoun} venceu a partida!`
         : 'O tempo regulamentar acabou e você venceu no placar!';
     } else if (gameState.scoreP2 > gameState.scoreP1) {
       outcome = 'loss';
       gameOverTitle.textContent = 'DERROTA!';
       gameOverTitle.style.color = '#f87171';
-      gameOverReason.textContent = gameMode === '2v2'
-        ? 'A dupla adversária venceu a partida.'
+      gameOverReason.textContent = teamMode
+        ? `A ${teamNoun} adversária venceu a partida.`
         : 'O tempo acabou e o Bot Vermelho marcou mais gols.';
     } else {
       outcome = 'draw';
       gameOverTitle.textContent = 'EMPATE!';
       gameOverTitle.style.color = '#fbbf24';
-      gameOverReason.textContent = gameMode === '2v2'
+      gameOverReason.textContent = teamMode
         ? 'O gol de ouro não saiu. A partida terminou empatada.'
         : 'Partida muito disputada! Terminou em empate.';
     }
   }
 
   const baseReward = ECONOMY.REWARDS[outcome === 'win' ? 'win' : outcome === 'draw' ? 'draw' : 'loss'];
-  const participationReward = gameMode === '2v2' ? 50 : 0;
-  const winBonus = gameMode === '2v2' && outcome === 'win' ? 50 : 0;
+  const participationReward = teamMode ? 50 + Math.max(0, getTeamSize() - 2) * 15 : 0;
+  const winBonus = teamMode && outcome === 'win' ? 50 : 0;
   const goalsReward = gameState.scoreP1 * ECONOMY.REWARDS.perGoal;
-  const challengeReward = gameMode === '2v2' && twoVtwoStats
+  const challengeReward = teamMode && twoVtwoStats
     ? Object.values(twoVtwoStats.completed).reduce((sum, complete) => sum + (complete ? 25 : 0), 0)
     : 0;
   const totalReward = baseReward + participationReward + winBonus + goalsReward + challengeReward;
@@ -656,13 +824,13 @@ function endGame(reason) {
   const resultLabel = outcome === 'win' ? 'Vitória' : outcome === 'draw' ? 'Empate' : 'Derrota';
   document.getElementById('reward-result-label').textContent = `${resultLabel}:`;
   document.getElementById('reward-result-val').textContent = `+${baseReward} LC`;
-  document.getElementById('reward-goals-label').textContent = `${gameMode === '2v2' ? 'Gols da dupla' : 'Gols marcados'} (${gameState.scoreP1}×10):`;
+  document.getElementById('reward-goals-label').textContent = `${teamMode ? `Gols do time (${gameMode})` : 'Gols marcados'} (${gameState.scoreP1}×10):`;
   document.getElementById('reward-goals-val').textContent = `+${goalsReward} LC`;
-  document.getElementById('reward-participation-row').hidden = gameMode !== '2v2';
+  document.getElementById('reward-participation-row').hidden = !teamMode;
   document.getElementById('reward-participation-val').textContent = `+${participationReward} LC`;
   document.getElementById('reward-win-row').hidden = winBonus === 0;
   document.getElementById('reward-win-val').textContent = `+${winBonus} LC`;
-  document.getElementById('reward-challenges-row').hidden = gameMode !== '2v2';
+  document.getElementById('reward-challenges-row').hidden = !teamMode;
   document.getElementById('reward-challenges-val').textContent = `+${challengeReward} LC`;
 
   const challengeNames = {
@@ -670,10 +838,10 @@ function endGame(reason) {
     twoOne: 'Completar uma tabela Toque e Passa',
     goalAfterMatePass: 'Marcar após receber do parceiro'
   };
-  document.getElementById('two-v-two-challenges-summary').textContent = gameMode === '2v2' && twoVtwoStats
+  document.getElementById('two-v-two-challenges-summary').textContent = teamMode && twoVtwoStats
     ? `Desafios (25 Lito Coins cada):\n${Object.entries(challengeNames).map(([key, name]) => `${twoVtwoStats.completed[key] ? '✓' : '○'} ${name}`).join('\n')}`
     : '';
-  document.getElementById('two-v-two-challenges-summary').hidden = gameMode !== '2v2';
+  document.getElementById('two-v-two-challenges-summary').hidden = !teamMode;
   document.getElementById('reward-new-balance').textContent = `${newBalance.toLocaleString('pt-BR')} LC`;
 
   const totalEl = document.getElementById('reward-total-val');
@@ -691,19 +859,32 @@ function endGame(reason) {
   syncModalInertState();
 }
 
+const FORMATION_SLOTS = {
+  1: [[0.37, 0]],
+  2: [[0.60, 0], [0.86, 0.29]],
+  3: [[0.78, 0], [0.52, -0.34], [0.30, 0.24]],
+  4: [[0.80, 0], [0.56, -0.36], [0.56, 0.36], [0.28, 0]],
+  5: [[0.82, -0.14], [0.60, 0.34], [0.56, -0.40], [0.34, 0.22], [0.22, 0]]
+};
+
 function resetPositions() {
   snakeTackles.length = 0;
   if (typeof curveShots !== 'undefined') curveShots.length = 0;
   if (typeof clearTwoOneState === 'function') clearTwoOneState();
+  if (typeof clearSpeedsterEffects === 'function') clearSpeedsterEffects();
+  if (typeof clearWebTraps === 'function') clearWebTraps();
   clearPistolAnimations();
   const p = CONFIG.pitch;
 
-  if (gameMode === '2v2') {
-    player1.reset(p.left + p.width * 0.30, p.centerY);
-    homeMate.reset(p.left + p.width * 0.43, p.centerY + 82);
-    player2.reset(p.right - p.width * 0.30, p.centerY + 5);
-    awayMate.reset(p.right - p.width * 0.43, p.centerY - 82);
-  } else if (gameMode === 'training') {
+  // Estaciona fora de campo quem não participa do modo atual
+  for (let i = 0; i < homePool.length; i++) {
+    homePool[i].reset(CONFIG.canvasWidth + 140 + i * 28, CONFIG.canvasHeight + 120);
+  }
+  for (let i = 0; i < awayPool.length; i++) {
+    awayPool[i].reset(CONFIG.canvasWidth + 160 + i * 28, CONFIG.canvasHeight + 160);
+  }
+
+  if (gameMode === 'training') {
     trainingDummyHasBall = true;
     player1.reset(p.centerX - 200, p.centerY);
     player1.facingX = 1;
@@ -711,12 +892,16 @@ function resetPositions() {
     homeMate.reset(p.centerX - 285, p.centerY + 105);
     player2.reset(p.centerX - 70, p.centerY);
     pinTrainingDummy();
-    awayMate.reset(CONFIG.canvasWidth + 130, CONFIG.canvasHeight + 100);
   } else {
-    player1.reset(260, 300);
-    player2.reset(740, 300);
-    homeMate.reset(CONFIG.canvasWidth + 100, CONFIG.canvasHeight + 100);
-    awayMate.reset(CONFIG.canvasWidth + 130, CONFIG.canvasHeight + 100);
+    const size = getTeamSize(gameMode);
+    const coords = FORMATION_SLOTS[size] || FORMATION_SLOTS[1];
+    const halfW = p.width / 2;
+    const halfH = p.height / 2;
+    for (let i = 0; i < size; i++) {
+      const [u, v] = coords[i] || [0.35, 0];
+      homePool[i].reset(p.left + u * halfW, p.centerY + v * halfH);
+      awayPool[i].reset(p.right - u * halfW, p.centerY - v * halfH);
+    }
   }
 
   ball.reset(p.centerX, p.centerY);
@@ -734,7 +919,10 @@ function copyEntityState(entity) {
 
 function restoreEntityReference(entity) {
   if (!entity) return null;
-  return entity.isHuman ? player1 : entity.isAwayMate ? awayMate : entity.isTeammate ? homeMate : player2;
+  if (entity.isHuman) return player1;
+  if (entity.isTeammate) return homePool[entity.aiRoleSlot || 1] || homeMate;
+  if (entity.isAwayMate) return awayPool[entity.aiRoleSlot || 1] || awayMate;
+  return player2;
 }
 
 function pinTrainingDummy() {
@@ -771,7 +959,7 @@ function beginTraining() {
     clearTimeout(endGameTimerId);
     endGameTimerId = null;
   }
-  trainingReturnMode = gameMode === '2v2' ? '2v2' : 'match';
+  trainingReturnMode = isOfficialMatchMode(gameMode) ? normalizeGameMode(gameMode) : 'match';
   trainingMatchSnapshot = hasNormalMatchInProgress
     ? {
         game: {
@@ -784,10 +972,8 @@ function beginTraining() {
           isOvertime: gameState.isOvertime,
           overtimeTimeRemaining: gameState.overtimeTimeRemaining
         },
-        player1: copyEntityState(player1),
-        player2: copyEntityState(player2),
-        homeMate: copyEntityState(homeMate),
-        awayMate: copyEntityState(awayMate),
+        homePool: homePool.map(copyEntityState),
+        awayPool: awayPool.map(copyEntityState),
         ball: copyEntityState(ball),
         twoOnePlay: twoOnePlay ? { ...twoOnePlay, trail: twoOnePlay.trail.map(point => ({ ...point })) } : null,
         twoVtwoStats: twoVtwoStats ? copyEntityState(twoVtwoStats) : null,
@@ -797,7 +983,8 @@ function beginTraining() {
 
   snakeTackles.length = 0;
   if (typeof curveShots !== 'undefined') curveShots.length = 0;
-  setPitchLayout('match');
+  if (typeof clearWebTraps === 'function') clearWebTraps();
+  setPitchLayout('training');
   gameMode = 'training';
   gameState.running = true;
   gameState.isGameOver = false;
@@ -811,6 +998,7 @@ function beginTraining() {
 
   refreshModeHud();
   if (typeof clearTwoOneState === 'function') clearTwoOneState();
+  if (typeof clearSpeedsterEffects === 'function') clearSpeedsterEffects();
   clearPistolAnimations();
   trainingDummyHasBall = true;
 
@@ -877,23 +1065,28 @@ function leaveTraining() {
 
   if (trainingMatchSnapshot) {
     const snapshot = trainingMatchSnapshot;
-    Object.assign(player1, snapshot.player1);
-    Object.assign(player2, snapshot.player2);
-    Object.assign(homeMate, snapshot.homeMate);
-    Object.assign(awayMate, snapshot.awayMate);
+    if (Array.isArray(snapshot.homePool)) {
+      snapshot.homePool.forEach((data, i) => { if (homePool[i]) Object.assign(homePool[i], data); });
+      snapshot.awayPool.forEach((data, i) => { if (awayPool[i]) Object.assign(awayPool[i], data); });
+    } else {
+      if (snapshot.player1) Object.assign(player1, snapshot.player1);
+      if (snapshot.player2) Object.assign(player2, snapshot.player2);
+      if (snapshot.homeMate) Object.assign(homeMate, snapshot.homeMate);
+      if (snapshot.awayMate) Object.assign(awayMate, snapshot.awayMate);
+    }
     Object.assign(ball, snapshot.ball);
     if (ball.dribbleLockOwner && !(ball.dribbleLockOwner instanceof Player)) {
-      ball.dribbleLockOwner = ball.dribbleLockOwner.isTeammate
-        ? homeMate
-        : ball.dribbleLockOwner.isHuman
-          ? player1
-          : ball.dribbleLockOwner.isAwayMate
-            ? awayMate
-            : player2;
+      ball.dribbleLockOwner = restoreEntityReference(ball.dribbleLockOwner);
     }
     Object.assign(gameState, snapshot.game);
     if (typeof clearTwoOneState === 'function') clearTwoOneState();
-    twoOnePlay = snapshot.twoOnePlay ? { ...snapshot.twoOnePlay, owner: player1, target: snapshot.twoOnePlay.mode === 'teammate' ? homeMate : null } : null;
+    twoOnePlay = snapshot.twoOnePlay
+      ? {
+          ...snapshot.twoOnePlay,
+          owner: player1,
+          target: snapshot.twoOnePlay.mode === 'teammate' ? restoreEntityReference(snapshot.twoOnePlay.target) || homeMate : null
+        }
+      : null;
     twoVtwoStats = snapshot.twoVtwoStats;
     snakeTackles.splice(0, snakeTackles.length, ...(snapshot.snakeTackles || []).map(restoreSnakeTackle));
     trainingMatchSnapshot = null;
@@ -912,6 +1105,9 @@ function resetTraining() {
   snakeTackles.length = 0;
   if (typeof curveShots !== 'undefined') curveShots.length = 0;
   if (typeof clearTwoOneState === 'function') clearTwoOneState();
+  if (typeof clearSpeedsterEffects === 'function') clearSpeedsterEffects();
+  if (typeof clearWebTraps === 'function') clearWebTraps();
+  clearPistolAnimations();
   gameState.pausedForGoal = false;
   gameState.goalPauseTimer = 0;
   gameState.countdownTimer = 0;
@@ -941,12 +1137,17 @@ function resetTraining() {
 }
 
 function refreshModeHud() {
-  document.getElementById('name-p1').textContent = gameMode === '2v2' ? 'Você + Parceiro' : 'Você';
-  document.getElementById('name-p2').textContent = gameMode === 'training'
+  const mode = normalizeGameMode(gameMode);
+  const size = getTeamSize(mode);
+  const p1Label = (playerConfig?.name || 'Você').trim() || 'Você';
+  document.getElementById('name-p1').textContent = size === 1 ? p1Label : size === 2 ? `${p1Label} + Parceiro` : `Time Azul (${mode})`;
+  document.getElementById('name-p2').textContent = mode === 'training'
     ? 'Adversário de Treino'
-    : gameMode === '2v2'
-      ? 'Dupla Vermelha'
-      : 'Bot Vermelho';
+    : size === 1
+      ? 'Bot Vermelho'
+      : size === 2
+        ? 'Dupla Vermelha'
+        : `Time Vermelho (${mode})`;
   badgeP1.style.backgroundColor = playerConfig.color;
   document.querySelectorAll('#hud .team-badge')[1].style.backgroundColor = '#e53935';
   document.getElementById('hud-training-label').textContent = 'Treino livre · adversário parado';
@@ -957,8 +1158,10 @@ function startFreshMatch(mode = 'match') {
     clearTimeout(endGameTimerId);
     endGameTimerId = null;
   }
-  gameMode = mode === '2v2' ? '2v2' : 'match';
+  const normalized = normalizeGameMode(mode);
+  gameMode = normalized === 'training' ? 'match' : normalized;
   setPitchLayout(gameMode);
+  syncHomeTeamAppearance();
   trainingMatchSnapshot = null;
   hasNormalMatchInProgress = true;
   clearGoalBanner();
@@ -981,7 +1184,7 @@ function startFreshMatch(mode = 'match') {
   gameState.overtimeTimeRemaining = 60;
   gameState.pendingGoalCountdown = false;
   triggerCountdown(3.0);
-  twoVtwoStats = gameMode === '2v2' ? newTwoVtwoStats() : null;
+  twoVtwoStats = isTeamMode() ? newTwoVtwoStats() : null;
   MatchRating.reset();
   hideFutCard();
 
@@ -990,14 +1193,17 @@ function startFreshMatch(mode = 'match') {
   player1.powerEffectTimer = 0;
   player1.nextKickPower = 1;
   player1.nextKickReach = 1;
-  for (const bot of [homeMate, awayMate, player2]) {
+  for (const bot of [...homePool.slice(1), ...awayPool]) {
     bot.powerCooldown = 0;
     bot.powerEffect = null;
     bot.powerEffectTimer = 0;
-    bot.aiPowerThink = 6 + Math.random() * 3;
+    bot.aiPowerThink = 1.6 + Math.random() * 2.2;
     bot.aiPowerId = null;
     bot.nextKickPower = 1;
     bot.nextKickReach = 1;
+  }
+  if (typeof assignFixedBotPowers === 'function') {
+    assignFixedBotPowers([...getActiveHomePlayers().filter(p => !p.isHuman), ...getActiveAwayPlayers()]);
   }
 
   scoreP1El.textContent = '0';
@@ -1587,10 +1793,10 @@ function redrawIdlePitchScene() {
   if (gameState.running) return;
   ctx.clearRect(0, 0, CONFIG.canvasWidth, CONFIG.canvasHeight);
   drawPitch(ctx);
+  if (typeof drawWebTraps === 'function') drawWebTraps(ctx);
   for (let i = 0; i < posts.length; i++) posts[i].draw(ctx);
   ball.draw(ctx);
-  player1.draw(ctx);
-  player2.draw(ctx);
+  for (const actor of getAllActivePlayers()) actor.draw(ctx);
 }
 
 /* ==========================================================================
@@ -1601,7 +1807,7 @@ let lastSaveTime = 0;
 let lastTackleTime = 0;
 
 function checkSaveInterception(defender) {
-  if (defender !== player1 && defender !== homeMate) return;
+  if (!defender || (!defender.isHuman && !defender.isTeammate)) return;
   const p = CONFIG.pitch;
   const g = CONFIG.goals;
   // Na pequena área / boca do gol defendido pelo time do jogador (lado esquerdo)
@@ -1623,15 +1829,15 @@ function checkSaveInterception(defender) {
 }
 
 function checkCleanTackle(tackler) {
-  if (tackler !== player1) return;
-  const opponents = gameMode === '2v2' ? [player2, awayMate] : [player2];
+  if (!tackler || (!tackler.isHuman && !tackler.isTeammate)) return;
+  const opponents = getActiveAwayPlayers();
   const carrier = opponents.find(opp => Math.hypot(opp.x - ball.x, opp.y - ball.y) < opp.radius + ball.radius + 12);
   if (carrier) {
     const now = performance.now();
     if (now - lastTackleTime > 1300) {
       lastTackleTime = now;
-      if (typeof CAREER !== 'undefined') CAREER.recordTackle();
-      if (typeof MatchRating !== 'undefined') MatchRating.recordTackle(player1);
+      if (tackler === player1 && typeof CAREER !== 'undefined') CAREER.recordTackle();
+      if (typeof MatchRating !== 'undefined') MatchRating.recordTackle(tackler);
     }
   }
 }
@@ -1663,7 +1869,7 @@ function physicsStep(dt) {
       updateCountdownOverlay();
     }
     if (!gameState.pausedForGoal) {
-      if (gameMode === '2v2' && gameState.isOvertime) {
+      if (isTeamMode() && gameState.isOvertime) {
         gameState.overtimeTimeRemaining -= dt;
         if (gameState.overtimeTimeRemaining <= 0) {
           gameState.overtimeTimeRemaining = 0;
@@ -1676,7 +1882,7 @@ function physicsStep(dt) {
         if (gameState.timeRemaining <= 0) {
           gameState.timeRemaining = 0;
           updateTimerDisplay();
-          if (gameMode === '2v2' && gameState.scoreP1 === gameState.scoreP2) {
+          if (isTeamMode() && gameState.scoreP1 === gameState.scoreP2) {
             beginGoldenGoal();
             return;
           }
@@ -1701,10 +1907,15 @@ function physicsStep(dt) {
 
   let moveX = 0;
   let moveY = 0;
-  if (input.left) moveX -= 1;
-  if (input.right) moveX += 1;
-  if (input.up) moveY -= 1;
-  if (input.down) moveY += 1;
+  if (player1.webSnareTimer <= 0) {
+    if (input.left) moveX -= 1;
+    if (input.right) moveX += 1;
+    if (input.up) moveY -= 1;
+    if (input.down) moveY += 1;
+  } else {
+    input.passRequested = false;
+    input.kickRequested = false;
+  }
 
   if (moveX !== 0 && moveY !== 0) {
     const inv = 1 / Math.SQRT2;
@@ -1721,38 +1932,25 @@ function physicsStep(dt) {
   if (!gameState.pausedForGoal) {
     updateSnakeTackles(dt);
     if (typeof updateCurveEffects === 'function') updateCurveEffects(dt);
-  }
-
-  if (player1.powerEffect === 'shadow') {
-    const opponents = gameMode === '2v2' ? [player2, awayMate] : [player2];
-    const marker = opponents.slice().sort((a, b) =>
-      Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y)
-    )[0];
-    if (marker) {
-      // Mira posição de marcação entre o adversário e o próprio gol esquerdo
-      const guardX = Math.max(CONFIG.pitch.left + player1.radius, marker.x - 24);
-      const guardY = marker.y + (CONFIG.pitch.centerY - marker.y) * 0.08;
-      const dx = guardX - player1.x;
-      const dy = guardY - player1.y;
-      const d = Math.hypot(dx, dy) || 1;
-      if (d > 6) {
-        moveX += (dx / d) * 0.62;
-        moveY += (dy / d) * 0.62;
-      }
-    }
+    if (typeof updateWebTraps === 'function') updateWebTraps(dt);
   }
 
   if (!gameState.pausedForGoal) {
-    const accelMult =
-      player1.twoOneRunTimer > 0 ? 1.52 :
-      player1.powerEffect === 'ego' ? 1.26 :
-      player1.powerEffect === 'shadow' ? 1.10 : 1.0;
-    player1.vx += moveX * CONFIG.physics.playerAcceleration * accelMult;
-    player1.vy += moveY * CONFIG.physics.playerAcceleration * accelMult;
+    const pace = typeof getModePaceScale === 'function' ? getModePaceScale() : { player: 1, ball: 1 };
+    if (player1.webSnareTimer <= 0) {
+      const accelMult =
+        player1.twoOneRunTimer > 0 ? 1.52 :
+        player1.powerEffect === 'ego' ? 1.26 : 1.0;
+      player1.vx += moveX * CONFIG.physics.playerAcceleration * pace.player * accelMult;
+      player1.vy += moveY * CONFIG.physics.playerAcceleration * pace.player * accelMult;
+    } else {
+      player1.vx *= 0.25;
+      player1.vy *= 0.25;
+    }
 
     if (input.passRequested) {
       input.passRequested = false;
-      if ((gameMode === '2v2' || gameMode === 'training') && player1.powerEffect === 'vision' && player1.powerEffectTimer > 0) {
+      if ((isTeamMode() || gameMode === 'training') && player1.powerEffect === 'vision' && player1.powerEffectTimer > 0) {
         const teammate = getVisionPassTarget(player1);
         if (!teammate) {
           showPowerFeedback('Nenhum aliado disponível para o passe da Visão', true);
@@ -1764,7 +1962,7 @@ function physicsStep(dt) {
       } else {
         const teammate = nearestPassTeammate(player1);
         const teammateDistance = teammate ? Math.hypot(teammate.x - player1.x, teammate.y - player1.y) : Infinity;
-        if (!teammate || teammateDistance > 320) {
+        if (!teammate || teammateDistance > 360) {
           showPowerFeedback('Nenhum aliado próximo para receber o passe', true);
         } else if (isVisionPassLaneBlocked()) {
           showPowerFeedback('Linha de passe bloqueada', true);
@@ -1779,61 +1977,57 @@ function physicsStep(dt) {
       player1.tryKick(ball, moveX, moveY);
     }
 
-    if (gameMode === '2v2') {
-      updatePowerBot(dt, homeMate);
-      updateHomeMateAI(dt);
-      updateAI(dt);
-      updateAwayMateAI(dt);
-    } else if (gameMode === 'match') {
-      updateAI(dt);
-    } else if (twoOnePlay && twoOnePlay.mode === 'teammate' && twoOnePlay.target === homeMate) {
+    if (gameMode !== 'training') {
+      if (typeof updateTeamBots === 'function') {
+        updateTeamBots(dt);
+      } else {
+        updateAI(dt);
+      }
+    } else if (twoOnePlay && twoOnePlay.mode === 'teammate' && twoOnePlay.target) {
       updateHomeMateAI(dt);
     }
   }
 
   updatePistolAnimations(dt);
 
-  player1.update(dt);
-  if (gameMode === 'training' || gameMode === '2v2') homeMate.update(dt);
-  player2.update(dt);
+  const activeHome = getActiveHomePlayers();
+  const activeAway = getActiveAwayPlayers();
+  const allActive = [...activeHome, ...activeAway];
+
+  for (let i = 0; i < allActive.length; i++) {
+    allActive[i].update(dt);
+  }
   if (gameMode === 'training') pinTrainingDummy();
-  if (gameMode === '2v2') awayMate.update(dt);
 
-  updatePlayerDribbleControl(player1);
-  if (gameMode === 'training' || gameMode === '2v2') updatePlayerDribbleControl(homeMate);
-  if (gameMode !== 'training') updatePlayerDribbleControl(player2);
-  if (gameMode === '2v2') updatePlayerDribbleControl(awayMate);
-
-  updatePhantomBallCarry(player1);
-  if (gameMode !== 'training') updatePhantomBallCarry(player2);
-  if (gameMode === '2v2') {
-    updatePhantomBallCarry(homeMate);
-    updatePhantomBallCarry(awayMate);
+  for (let i = 0; i < activeHome.length; i++) {
+    updatePlayerDribbleControl(activeHome[i]);
+    updatePhantomBallCarry(activeHome[i]);
+  }
+  if (gameMode !== 'training') {
+    for (let i = 0; i < activeAway.length; i++) {
+      updatePlayerDribbleControl(activeAway[i]);
+      updatePhantomBallCarry(activeAway[i]);
+    }
   }
 
   updateVisionPassAssist(dt);
   updateVisionLongPassFlight(dt);
 
-  if (player1.dashTimer > 0) addLightningTrail(player1);
-  if (gameMode === '2v2') {
-    if (homeMate.dashTimer > 0) addLightningTrail(homeMate);
-    if (player2.dashTimer > 0) addLightningTrail(player2);
-    if (awayMate.dashTimer > 0) addLightningTrail(awayMate);
-  }
-  if (player1.powerEffect === 'phantom' && player1.powerEffectTimer > 0 && player1.ghostTrailTimer <= 0) {
-    addPhantomShadow(player1);
-    player1.ghostTrailTimer = 0.055;
+  for (let i = 0; i < allActive.length; i++) {
+    const actor = allActive[i];
+    if (actor.dashTimer > 0) recordSpeedsterTrail(actor);
+    if (actor.powerEffect === 'phantom' && actor.powerEffectTimer > 0 && actor.ghostTrailTimer <= 0) {
+      addPhantomShadow(actor);
+      actor.ghostTrailTimer = 0.055;
+    }
   }
 
   ball.update();
 
-  resolveCircleCollision(player1, player2, CONFIG.physics.restitutionPlayer);
-  if (gameMode === 'training' || gameMode === '2v2') resolveCircleCollision(player1, homeMate, CONFIG.physics.restitutionPlayer);
-  if (gameMode === '2v2') {
-    resolveCircleCollision(player1, awayMate, CONFIG.physics.restitutionPlayer);
-    resolveCircleCollision(player2, homeMate, CONFIG.physics.restitutionPlayer);
-    resolveCircleCollision(player2, awayMate, CONFIG.physics.restitutionPlayer);
-    resolveCircleCollision(homeMate, awayMate, CONFIG.physics.restitutionPlayer);
+  for (let i = 0; i < allActive.length; i++) {
+    for (let j = i + 1; j < allActive.length; j++) {
+      resolveCircleCollision(allActive[i], allActive[j], CONFIG.physics.restitutionPlayer);
+    }
   }
 
   if (gameMode === 'training') {
@@ -1841,40 +2035,37 @@ function physicsStep(dt) {
     updateTrainingDummyBall();
   }
 
-  if (player1.ignoreBallCollisionFrames <= 0 && !(typeof shouldSkipNormalBallCollisionForTwoOne === 'function' && shouldSkipNormalBallCollisionForTwoOne(player1))) {
-    if (shouldBallContact(player1, [player2, ...(gameMode === '2v2' ? [awayMate] : [])])) {
-      checkSaveInterception(player1);
-      checkCleanTackle(player1);
-      resolveCircleCollision(player1, ball, CONFIG.physics.restitutionBall);
+  for (let i = 0; i < activeHome.length; i++) {
+    const h = activeHome[i];
+    if (h.ignoreBallCollisionFrames <= 0 && !(typeof shouldSkipNormalBallCollisionForTwoOne === 'function' && shouldSkipNormalBallCollisionForTwoOne(h))) {
+      if (shouldBallContact(h, activeAway)) {
+        checkSaveInterception(h);
+        checkCleanTackle(h);
+        resolveCircleCollision(h, ball, CONFIG.physics.restitutionBall);
+      }
     }
   }
-  if (player2.ignoreBallCollisionFrames <= 0) {
-    if (shouldBallContact(player2, [player1, ...(gameMode === '2v2' ? [homeMate] : [])])) {
-      resolveCircleCollision(player2, ball, CONFIG.physics.restitutionBall);
+  for (let i = 0; i < activeAway.length; i++) {
+    const a = activeAway[i];
+    if (a.ignoreBallCollisionFrames <= 0) {
+      if (shouldBallContact(a, activeHome)) {
+        resolveCircleCollision(a, ball, CONFIG.physics.restitutionBall);
+      }
     }
-  }
-  if ((gameMode === 'training' || gameMode === '2v2') && homeMate.ignoreBallCollisionFrames <= 0 && !(typeof shouldSkipNormalBallCollisionForTwoOne === 'function' && shouldSkipNormalBallCollisionForTwoOne(homeMate)) && shouldBallContact(homeMate, [player2, ...(gameMode === '2v2' ? [awayMate] : [])])) {
-    checkSaveInterception(homeMate);
-    resolveCircleCollision(homeMate, ball, CONFIG.physics.restitutionBall);
-  }
-  if (gameMode === '2v2' && awayMate.ignoreBallCollisionFrames <= 0 && shouldBallContact(awayMate, [player1, homeMate])) {
-    resolveCircleCollision(awayMate, ball, CONFIG.physics.restitutionBall);
   }
 
   for (let i = 0; i < posts.length; i++) {
     resolveCirclePostCollision(ball, posts[i], CONFIG.physics.restitutionWall);
-    resolveCirclePostCollision(player1, posts[i], 0.35);
-    if (gameMode === 'training' || gameMode === '2v2') resolveCirclePostCollision(homeMate, posts[i], 0.35);
-    resolveCirclePostCollision(player2, posts[i], 0.35);
-    if (gameMode === '2v2') resolveCirclePostCollision(awayMate, posts[i], 0.35);
+    for (let j = 0; j < allActive.length; j++) {
+      resolveCirclePostCollision(allActive[j], posts[i], 0.35);
+    }
   }
 
   for (let i = 0; i < netSegmentsForPlayers.length; i++) {
     const seg = netSegmentsForPlayers[i];
-    resolveCircleSegment(player1, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
-    if (gameMode === 'training' || gameMode === '2v2') resolveCircleSegment(homeMate, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
-    resolveCircleSegment(player2, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
-    if (gameMode === '2v2') resolveCircleSegment(awayMate, seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
+    for (let j = 0; j < allActive.length; j++) {
+      resolveCircleSegment(allActive[j], seg.x1, seg.y1, seg.x2, seg.y2, 0.2);
+    }
   }
 
   stopVisionPassFlightOnInterception();
@@ -1885,10 +2076,7 @@ function physicsStep(dt) {
   if (gameMode === 'training') {
     const p = CONFIG.pitch;
     const speed = Math.hypot(ball.vx, ball.vy);
-    const tooFar =
-      Math.hypot(ball.x - player1.x, ball.y - player1.y) > 360 &&
-      Math.hypot(ball.x - homeMate.x, ball.y - homeMate.y) > 300 &&
-      Math.hypot(ball.x - player2.x, ball.y - player2.y) > 300;
+    const tooFar = allActive.every(actor => Math.hypot(ball.x - actor.x, ball.y - actor.y) > 340);
     if (ball.x < p.left || ball.x > p.right || ball.y < p.top || ball.y > p.bottom || (speed < 0.18 && tooFar)) {
       ball.reset(p.centerX, p.centerY);
     }
@@ -1915,6 +2103,7 @@ function gameLoop(timestamp) {
 
   ctx.clearRect(0, 0, CONFIG.canvasWidth, CONFIG.canvasHeight);
   drawPitch(ctx);
+  if (typeof drawWebTraps === 'function') drawWebTraps(ctx);
   drawVisionPuzzleOverlay(ctx);
   drawTwoVtwoVisionGuidance(ctx);
   drawVisionLongPassPreview(ctx);
@@ -1923,16 +2112,22 @@ function gameLoop(timestamp) {
   for (let i = 0; i < posts.length; i++) posts[i].draw(ctx);
   updateAndDrawParticles(ctx);
   updateAndDrawPhantomShadows(ctx);
-  updateAndDrawLightningTrails(ctx);
+  updateAndDrawSpeedsterEffects(ctx, elapsed);
   drawSnakeTackles(ctx);
   if (typeof drawCurveEffects === 'function') drawCurveEffects(ctx);
   drawTwoOneVisuals(ctx);
   drawSkillAuras(ctx);
   ball.draw(ctx);
-  player1.draw(ctx);
-  if (gameMode === 'training' || gameMode === '2v2') homeMate.draw(ctx);
-  player2.draw(ctx);
-  if (gameMode === '2v2') awayMate.draw(ctx);
+
+  const allActive = getAllActivePlayers();
+  for (let i = 0; i < allActive.length; i++) {
+    allActive[i].draw(ctx);
+  }
+  if (typeof drawSpeedsterPantherEntity === 'function') {
+    for (let i = 0; i < allActive.length; i++) {
+      if (allActive[i].dashTimer > 0) drawSpeedsterPantherEntity(ctx, allActive[i]);
+    }
+  }
   drawPistolAnimations(ctx);
   updatePowerHud();
 
@@ -1943,12 +2138,17 @@ function gameLoop(timestamp) {
    EVENTOS DOS BOTÕES DE PARTIDA E INICIALIZAÇÃO
    ========================================================================== */
 
-startBtn.addEventListener('click', () => {
+window.startModeFromSetup = function (selectedMode) {
+  const normalized = normalizeGameMode(selectedMode);
   Sound.init();
+  if (normalized === 'training') {
+    beginTraining();
+    return;
+  }
   menuWasRunning = false;
   refreshResumeSlot();
   menuOverlay.classList.add('hidden');
-  startFreshMatch('match');
+  startFreshMatch(normalized);
   document.getElementById('power-hud').classList.toggle('hidden', !profile.equippedPower);
   syncModalInertState();
   if (!gameState.running) {
@@ -1956,24 +2156,11 @@ startBtn.addEventListener('click', () => {
     gameState.lastTimestamp = performance.now();
     requestAnimationFrame(gameLoop);
   }
-});
-
-twoVtwoStartBtn.addEventListener('click', () => {
-  Sound.init();
-  menuWasRunning = false;
-  refreshResumeSlot();
-  menuOverlay.classList.add('hidden');
-  startFreshMatch('2v2');
-  document.getElementById('power-hud').classList.toggle('hidden', !profile.equippedPower);
-  syncModalInertState();
-  gameState.running = true;
-  gameState.lastTimestamp = performance.now();
-  requestAnimationFrame(gameLoop);
-});
+};
 
 playAgainBtn.addEventListener('click', () => {
   Sound.init();
-  startFreshMatch(gameMode === '2v2' ? '2v2' : 'match');
+  startFreshMatch(gameMode);
   document.getElementById('power-hud').classList.toggle('hidden', !profile.equippedPower);
   syncModalInertState();
   if (!gameState.running) {
@@ -2001,7 +2188,7 @@ btnMenu.addEventListener('click', () => {
 
 btnRestart.addEventListener('click', () => {
   if (gameMode === 'training') resetTraining();
-  else startFreshMatch(gameMode === '2v2' ? '2v2' : 'match');
+  else startFreshMatch(gameMode);
 });
 
 const gameOverMenuBtn = document.getElementById('game-over-menu-btn');

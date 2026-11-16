@@ -14,7 +14,25 @@
 const pistolAnimations = [];
 const PISTOL_ANIM_DURATION = 0.56;
 
+function drawRoundedRectPath(renderCtx, x, y, w, h, r) {
+  if (typeof renderCtx.roundRect === 'function') {
+    renderCtx.roundRect(x, y, w, h, r);
+    return;
+  }
+  const radius = Math.min(r, w * 0.5, h * 0.5);
+  renderCtx.moveTo(x + radius, y);
+  renderCtx.lineTo(x + w - radius, y);
+  renderCtx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  renderCtx.lineTo(x + w, y + h - radius);
+  renderCtx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  renderCtx.lineTo(x + radius, y + h);
+  renderCtx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  renderCtx.lineTo(x, y + radius);
+  renderCtx.quadraticCurveTo(x, y, x + radius, y);
+}
+
 function playPistolAnimation(actor, dirX, dirY) {
+  if (!actor || !Number.isFinite(actor.x) || !Number.isFinite(actor.y)) return;
   const len = Math.hypot(dirX, dirY) || 1;
   const nx = dirX / len;
   const ny = dirY / len;
@@ -227,7 +245,7 @@ function drawProceduralRevolver(renderCtx, cockRatio, muzzleHeat) {
   // Tambor giratório com ranhuras
   renderCtx.fillStyle = '#475569';
   renderCtx.beginPath();
-  renderCtx.roundRect(-2, -6.5, 13, 11.5, 2.4);
+  drawRoundedRectPath(renderCtx, -2, -6.5, 13, 11.5, 2.4);
   renderCtx.fill();
   renderCtx.stroke();
 

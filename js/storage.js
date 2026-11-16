@@ -52,6 +52,12 @@ const ECONOMY = {
       ownedPowers: [],
       ownedCards: ['card_gold'],
       equippedCard: 'card_gold',
+      ownedAvatars: ['pfp_default'],
+      equippedAvatar: 'pfp_default',
+      profileConfigured: false,
+      name: 'Lito',
+      position: 'ATA',
+      nationality: 'BR',
       powerLevels: {},
       equippedShirt: 'classic',
       equippedPower: null,
@@ -65,7 +71,16 @@ const ECONOMY = {
     try {
       const raw = localStorage.getItem(this.LS_KEY_PROFILE);
       if (!raw) return fallback;
-      return { ...fallback, ...JSON.parse(raw) };
+      const merged = { ...fallback, ...JSON.parse(raw) };
+      if (!Array.isArray(merged.ownedAvatars) || !merged.ownedAvatars.length) {
+        merged.ownedAvatars = ['pfp_default'];
+      } else if (!merged.ownedAvatars.includes('pfp_default')) {
+        merged.ownedAvatars = ['pfp_default', ...merged.ownedAvatars];
+      }
+      if (!merged.equippedAvatar || !merged.ownedAvatars.includes(merged.equippedAvatar)) {
+        merged.equippedAvatar = 'pfp_default';
+      }
+      return merged;
     } catch (e) {
       return fallback;
     }
@@ -153,7 +168,10 @@ profile.powerLevels = profile.powerLevels || {};
 
 let playerConfig = {
   color: profile.color || '#2b70f6',
-  number: profile.number || 10
+  number: profile.number || 10,
+  name: profile.name || 'Lito',
+  position: profile.position || 'ATA',
+  nationality: profile.nationality || 'BR'
 };
 
 function isValidRemapCode(code, otherCode) {
@@ -213,6 +231,9 @@ function updateCoinUI() {
 function persistProfile() {
   profile.color = playerConfig.color;
   profile.number = playerConfig.number;
+  profile.name = (playerConfig.name || 'Lito').trim().slice(0, 14) || 'Lito';
+  profile.position = playerConfig.position || 'ATA';
+  profile.nationality = playerConfig.nationality || 'BR';
   profile.controls = { ...controlsConfig };
   ECONOMY.saveProfile(profile);
   updateCoinUI();
@@ -326,7 +347,7 @@ const MISSIONS = {
   },
 
   recordGoal(mode) {
-    if (mode !== 'match' && mode !== '2v2') return;
+    if (!['match', '2v2', '3v3', '4v4', '5v5'].includes(mode)) return;
     this.increment('daily', 'd_goals_5', 1);
     this.increment('weekly', 'w_goals_25', 1);
     this.increment('lifetime', 'l_first_goal', 1);
@@ -338,7 +359,7 @@ const MISSIONS = {
   },
 
   recordMatchEnd(mode, outcome) {
-    if (mode !== 'match' && mode !== '2v2') return;
+    if (!['match', '2v2', '3v3', '4v4', '5v5'].includes(mode)) return;
     this.increment('daily', 'd_play_2', 1);
     this.increment('weekly', 'w_play_10', 1);
     this.increment('lifetime', 'l_matches_25', 1);
@@ -348,7 +369,7 @@ const MISSIONS = {
       this.increment('weekly', 'w_wins_5', 1);
       if (mode === 'match') {
         this.increment('lifetime', 'l_win_1v1_5', 1);
-      } else if (mode === '2v2') {
+      } else if (['2v2', '3v3', '4v4', '5v5'].includes(mode)) {
         this.increment('weekly', 'w_win_2v2_3', 1);
         this.increment('lifetime', 'l_win_2v2_5', 1);
       }

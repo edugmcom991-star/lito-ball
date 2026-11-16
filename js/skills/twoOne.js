@@ -188,15 +188,32 @@ function addTwoOneShockwave(x, y, maxRadius = 46, color = '#22d3ee', maxLife = 0
   });
 }
 
-function isTwoOneTeammateEligible(actor) {
-  if (gameMode !== '2v2' && gameMode !== 'training') return false;
-  if (typeof homeMate === 'undefined' || !homeMate) return false;
-  const dist = Math.hypot(homeMate.x - actor.x, homeMate.y - actor.y);
-  if (dist < 52 || dist > 395) return false;
-  if (typeof isPassPathBlocked === 'function' && isPassPathBlocked(actor, homeMate, actor)) {
-    return false;
+function findBestTwoOneTeammate(actor) {
+  const inTeamOrTraining = gameMode === 'training' || ['2v2', '3v3', '4v4', '5v5'].includes(gameMode);
+  if (!inTeamOrTraining) return null;
+  const mates = typeof getTeammatesOf === 'function'
+    ? getTeammatesOf(actor).filter(m => m && m !== actor)
+    : (typeof homeMate !== 'undefined' && homeMate && homeMate !== actor ? [homeMate] : []);
+  if (!mates.length) return null;
+
+  let best = null;
+  let bestScore = Infinity;
+  for (const mate of mates) {
+    const dist = Math.hypot(mate.x - actor.x, mate.y - actor.y);
+    if (dist < 52 || dist > 420) continue;
+    if (typeof isPassPathBlocked === 'function' && isPassPathBlocked(actor, mate, actor)) continue;
+    const forwardBias = (mate.x - actor.x) * ((actor.isHuman || actor.isTeammate) ? 1 : -1) > 0 ? -25 : 0;
+    const score = dist + forwardBias;
+    if (score < bestScore) {
+      bestScore = score;
+      best = mate;
+    }
   }
-  return true;
+  return best;
+}
+
+function isTwoOneTeammateEligible(actor) {
+  return !!findBestTwoOneTeammate(actor);
 }
 
 function shouldSkipNormalBallCollisionForTwoOne(actor) {
@@ -225,7 +242,8 @@ function startTwoOne(actor) {
   }
 
   const moveVec = getTwoOneMoveVector(actor);
-  const useTeammate = isTwoOneTeammateEligible(actor);
+  const eligibleMate = findBestTwoOneTeammate(actor);
+  const useTeammate = !!eligibleMate;
   let mode = 'wall';
   let wallSide = null;
   let targetActor = null;
@@ -234,9 +252,9 @@ function startTwoOne(actor) {
 
   if (useTeammate) {
     mode = 'teammate';
-    targetActor = homeMate;
-    relayX = homeMate.x;
-    relayY = homeMate.y;
+    targetActor = eligibleMate;
+    relayX = eligibleMate.x;
+    relayY = eligibleMate.y;
   } else {
     const anchor = chooseTwoOneWallAnchor(actor);
     if (!anchor) {

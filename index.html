@@ -14,6 +14,8 @@
   <script defer src="js/skills/curveShot.js"></script>
   <script defer src="js/skills/pistolShot.js"></script>
   <script defer src="js/skills/twoOne.js"></script>
+  <script defer src="js/skills/speedster.js"></script>
+  <script defer src="js/skills/webTrap.js"></script>
   <script defer src="js/skills/powers.js"></script>
   <script defer src="js/ai.js"></script>
   <script defer src="js/ui/menus.js"></script>
@@ -100,8 +102,9 @@
       <path d="M8.5 4 4 6.5l2 4 2.5-1V20h7V9.5l2.5 1 2-4L15.5 4a3.8 3.8 0 0 1-7 0Z" fill="currentColor" fill-opacity="0.15" />
     </symbol>
 
-    <symbol id="icon-career" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2l3 6.5 7 .8-5.2 4.8 1.5 7-6.3-3.6-6.3 3.6 1.5-7L2 9.3l7-.8L12 2Z" fill="currentColor" fill-opacity="0.22" />
+    <symbol id="icon-career" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 4.5A2.5 2.5 0 0 1 7.5 2h9A2.5 2.5 0 0 1 19 4.5v12.8l-7 4.7-7-4.7V4.5Z" fill="currentColor" fill-opacity="0.16" />
+      <path d="M12 6.2l1.4 3 3.3.4-2.4 2.2.7 3.2-3-1.6-3 1.6.7-3.2-2.4-2.2 3.3-.4 1.4-3Z" fill="currentColor" fill-opacity="0.32" />
     </symbol>
 
     <symbol id="icon-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -139,7 +142,8 @@
       <path d="M21 6.5 22.8 5M21 10h2M21 13.5l1.8 1.5" stroke="#fb923c" />
     </symbol>
     <symbol id="icon-skill-sprint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 2 5 13h6l-1.5 9L19 10.5h-6L14 2Z" fill="currentColor" fill-opacity="0.24" />
+      <path d="M13.5 2.5 5 13h5.5l-1.5 8.5L19 10.5h-5.8l.3-8Z" fill="currentColor" fill-opacity="0.24" />
+      <path d="M3 6.5h4.5M2.5 10h3M3.5 17.5h4" />
     </symbol>
     <symbol id="icon-skill-phantom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 20V11a6 6 0 0 1 12 0v9l-3-2-3 2-3-2-3 2Z" fill="currentColor" fill-opacity="0.18" />
@@ -177,8 +181,16 @@
       <circle cx="12" cy="12" r="2" fill="currentColor" />
       <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
     </symbol>
-    <symbol id="icon-skill-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3 4.5 6.2v5.4c0 4.6 3.2 8.2 7.5 9.4 4.3-1.2 7.5-4.8 7.5-9.4V6.2L12 3Z" fill="currentColor" fill-opacity="0.2" />
+    <symbol id="icon-skill-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9.2" stroke-opacity="0.45" />
+      <circle cx="12" cy="12" r="5.2" />
+      <path d="M12 2.5v19M2.5 12h19M5.2 5.2l13.6 13.6M18.8 5.2 5.2 18.8" />
+      <circle cx="12" cy="12" r="1.9" fill="currentColor" />
+    </symbol>
+    <symbol id="icon-user-pfp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9.2" fill="currentColor" fill-opacity="0.14" />
+      <circle cx="12" cy="9.2" r="3.1" fill="currentColor" fill-opacity="0.28" />
+      <path d="M6.8 18.5a5.8 5.8 0 0 1 10.4 0" />
     </symbol>
     <symbol id="icon-skill-ego" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 2.5c2 3.5 5 5.2 5 9.2a5 5 0 1 1-10 0c0-2.1 1-4.1 2.4-5.7.2 1.8 1.1 2.7 2.1 2.7-.2-2-.3-4 .5-6.2Z" fill="currentColor" fill-opacity="0.24" />
@@ -187,6 +199,45 @@
       <path d="M8 3.5h8l1.5 2H20a1 1 0 0 1 1 1v13a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5v-13a1 1 0 0 1 1-1h2.5l1.5-2Z" />
       <rect x="8.5" y="2.5" width="7" height="3" rx="1" fill="currentColor" fill-opacity="0.24" />
       <path d="M7.5 10.5l1.8 1.8 3.2-3.3M14 11h3.5M7.5 15.8l1.8 1.8 3.2-3.3M14 16h3.5" />
+    </symbol>
+
+    <!-- Ícones Vetoriais de Estatísticas e Emblemas das Cartinhas -->
+    <symbol id="icon-stat-ball" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9.2" fill="currentColor" fill-opacity="0.14" />
+      <polygon points="12,7.5 16,10.5 14.5,15.2 9.5,15.2 8,10.5" fill="currentColor" fill-opacity="0.34" />
+      <path d="M12 2.8V7.5M20.6 9.3 16 10.5M17.2 19.6 14.5 15.2M6.8 19.6 9.5 15.2M3.4 9.3 8 10.5" />
+    </symbol>
+    <symbol id="icon-stat-stadium" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="8.5" rx="9" ry="4" fill="currentColor" fill-opacity="0.14" />
+      <path d="M3 8.5v7c0 2.2 4 4 9 4s9-1.8 9-4v-7" />
+      <path d="M7 11.8v6.5M17 11.8v6.5M12 12.5v7M6.5 4.2V2.5M12 3.5V2M17.5 4.2V2.5" />
+    </symbol>
+    <symbol id="icon-stat-gloves" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 12V6.5a1.5 1.5 0 0 1 3 0V11M10 10V5a1.5 1.5 0 0 1 3 0v5.5M13 10.5V5.8a1.5 1.5 0 0 1 3 0v6.2M16 12V8.2a1.4 1.4 0 0 1 2.8 0v6.5a5.5 5.5 0 0 1-5.5 5.3H10a5 5 0 0 1-4.8-3.7l-1.4-4.2a1.5 1.5 0 0 1 2.7-1.1L7 12Z" fill="currentColor" fill-opacity="0.16" />
+    </symbol>
+    <symbol id="icon-card-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 17.5 5.2 7.5l4.6 4 2.2-5.5 2.2 5.5 4.6-4 1.7 10H3.5Z" fill="currentColor" fill-opacity="0.28" />
+      <path d="M4.5 20.5h15" />
+    </symbol>
+    <symbol id="icon-card-dino" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 19L9 5l3 4 4-5-2 15M8 14l9-9" />
+      <path d="M13 19l5-10" />
+    </symbol>
+    <symbol id="icon-card-waifu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20s-7-4.4-8.6-8.7A4.9 4.9 0 0 1 12 6.5a4.9 4.9 0 0 1 8.6 4.8C19 15.6 12 20 12 20Z" fill="currentColor" fill-opacity="0.25" />
+      <path d="M12 4.2v-1.8M18.2 5.5l1.2-1.2M5.8 5.5 4.6 4.3" />
+    </symbol>
+    <symbol id="icon-card-isagi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 1 0 4 0h4.5A1.5 1.5 0 0 1 20 5.5V10a2 2 0 1 0 0 4v4.5A1.5 1.5 0 0 1 18.5 20H14a2 2 0 1 1-4 0H5.5A1.5 1.5 0 0 1 4 18.5V14a2 2 0 1 1 0-4V9Z" fill="currentColor" fill-opacity="0.2" />
+    </symbol>
+    <symbol id="icon-card-chigiri" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7.5 12 4l8 3.5-2.5 5 3 2-8.5 5.5L3.5 14.5l3-2L4 7.5Z" fill="currentColor" fill-opacity="0.22" />
+      <path d="M8.5 10.5l2 1.2M15.5 10.5l-2 1.2M10 15.5h4" />
+    </symbol>
+    <symbol id="icon-card-kurumi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.8" fill="currentColor" fill-opacity="0.2" />
+      <circle cx="12" cy="12" r="4.6" stroke-dasharray="2.5 2" />
+      <path d="M12 7v5l3.5 2M12 1.8v2.2M12 20v2.2M1.8 12H4M20 12h2.2" />
     </symbol>
   </svg>
 
@@ -230,11 +281,17 @@
     <!-- FUT CARD: Comemoração de Gol estilo FIFA Ultimate Team -->
     <div id="fut-card" class="fut-card" aria-hidden="true" role="presentation">
       <div class="futc-inner">
-        <!-- Topo: rating + posição -->
+        <div class="futc-art-layer" aria-hidden="true">
+          <img class="futc-bg-img" alt="" hidden onerror="this.hidden=true;" />
+        </div>
+        <div class="futc-scrim" aria-hidden="true"></div>
+        <div class="futc-frame-trim" aria-hidden="true"></div>
+        <!-- Topo: rating + posição + nacionalidade + escudo -->
         <div class="futc-top">
           <div class="futc-rating-block">
             <span class="futc-rating">7.5</span>
             <span class="futc-pos">ATA</span>
+            <span class="futc-nat" id="futc-nat-badge"></span>
           </div>
           <div class="futc-shield" aria-hidden="true">
             <svg viewBox="0 0 32 36" width="28" height="32" fill="none">
@@ -244,8 +301,9 @@
           </div>
         </div>
 
-        <!-- Avatar do botão em canvas -->
+        <!-- Avatar do botão / foto de perfil -->
         <div class="futc-avatar-wrap">
+          <div class="futc-pfp-slot" id="futc-pfp-slot" hidden></div>
           <canvas class="futc-avatar-canvas" width="90" height="90"></canvas>
           <div class="futc-avatar-shine" aria-hidden="true"></div>
         </div>
@@ -485,7 +543,7 @@
               <span>Futebol Arcade 2D</span>
             </span>
             <h1 id="main-menu-title" class="menu-title">LITOBALL</h1>
-            <p class="menu-subtitle">Botão tático em 60 FPS &bull; Duelos 1v1, 2v2 e Habilidades</p>
+            <p class="menu-subtitle">Botão tático em 60 FPS &bull; Modos 1v1 a 5v5, Treino e Habilidades</p>
           </div>
           <div class="menu-hero-actions">
             <button id="menu-fullscreen-btn" type="button" class="hud-btn menu-fs-btn cyber-chip-btn" title="Alternar Tela Cheia">
@@ -502,91 +560,19 @@
 
         <div id="resume-slot"></div>
 
-        <!-- Seletor de Campo Pré-Partida (1v1, 2v2 e Treino) -->
-        <section class="pitch-selector-section" aria-label="Escolha do campo">
-          <div class="pitch-selector-head">
-            <span class="pitch-selector-kicker">Arena da Partida</span>
-            <span class="pitch-selector-hint">Salvo automaticamente para 1v1, 2v2 e Treino</span>
-          </div>
-          <div class="pitch-choice-grid" role="radiogroup" aria-label="Tema do campo">
-            <label class="pitch-choice-card">
-              <input type="radio" name="pitch-theme" value="classic" checked />
-              <span class="pitch-mini-preview pitch-preview-classic" aria-hidden="true">
-                <span class="pitch-mini-line"></span>
-                <span class="pitch-mini-circle"></span>
-              </span>
-              <span class="pitch-choice-text">
-                <strong>Campo Clássico</strong>
-                <small>Grama verde natural</small>
-              </span>
-            </label>
-            <label class="pitch-choice-card">
-              <input type="radio" name="pitch-theme" value="futsal" />
-              <span class="pitch-mini-preview pitch-preview-futsal" aria-hidden="true">
-                <span class="pitch-mini-line"></span>
-                <span class="pitch-mini-circle"></span>
-              </span>
-              <span class="pitch-choice-text">
-                <strong>Quadra de Futsal</strong>
-                <small>Piso amadeirado &amp; área D</small>
-              </span>
-            </label>
-            <label class="pitch-choice-card">
-              <input type="radio" name="pitch-theme" value="cyber" />
-              <span class="pitch-mini-preview pitch-preview-cyber" aria-hidden="true">
-                <span class="pitch-mini-line"></span>
-                <span class="pitch-mini-circle"></span>
-              </span>
-              <span class="pitch-choice-text">
-                <strong>Arena Futurista</strong>
-                <small>Neon ciano &amp; grade tática</small>
-              </span>
-            </label>
-            <label class="pitch-choice-card">
-              <input type="radio" name="pitch-theme" value="jurassic" />
-              <span class="pitch-mini-preview pitch-preview-jurassic" aria-hidden="true">
-                <span class="pitch-mini-line"></span>
-                <span class="pitch-mini-circle"></span>
-              </span>
-              <span class="pitch-choice-text">
-                <strong>Arena Jurássica</strong>
-                <small>Fóssil T-Rex &amp; bordas âmbar</small>
-              </span>
-            </label>
-          </div>
-        </section>
-
-        <!-- Seleção Rápida de Modos (Botões Chanfrados Cyber-Arcade) -->
-        <div class="mode-grid">
-          <button id="start-btn" type="button" class="primary-btn mode-card-btn mode-primary cyber-btn cyber-btn-1v1">
-            <span class="mode-btn-row">
+        <!-- Botão Único Principal de Jogar -->
+        <div class="play-cta-wrap">
+          <button id="open-play-setup-btn" type="button" class="primary-btn play-hero-btn cyber-btn">
+            <span class="play-hero-content">
               <span class="mode-icon-badge" aria-hidden="true">
-                <svg class="svg-icon" width="24" height="24"><use href="#icon-duel-1v1"></use></svg>
+                <svg class="svg-icon" width="28" height="28"><use href="#icon-play"></use></svg>
               </span>
-              <span class="mode-title-group">
-                <span class="mode-title">Jogar 1v1</span>
-                <span class="mode-desc">DUELO CLÁSSICO &bull; 3 MIN OU 5 GOLS</span>
+              <span class="play-hero-text">
+                <span class="play-hero-title">JOGAR</span>
+                <span class="play-hero-sub">TREINO LIVRE &bull; 1v1 &bull; 2v2 &bull; 3v3 &bull; 4v4 &bull; 5v5 &amp; ARENA</span>
               </span>
               <span class="cyber-chevrons" aria-hidden="true">&raquo;</span>
             </span>
-          </button>
-          <button id="start-2v2-btn" type="button" class="secondary-btn mode-card-btn two-v-two-mode-btn cyber-btn cyber-btn-2v2">
-            <span class="mode-btn-inline">
-              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true">
-                <svg class="svg-icon" width="22" height="22"><use href="#icon-duo-2v2"></use></svg>
-              </span>
-              <span class="mode-title">Jogar 2v2 &mdash; Duplas</span>
-            </span>
-            <span class="mode-desc">Arena ampliada &bull; Tabelas, passes e 5 gols</span>
-          </button>
-          <button id="start-training-btn" type="button" class="secondary-btn mode-card-btn mode-training cyber-btn cyber-btn-training">
-            <span class="mode-btn-inline">
-              <span class="mode-icon-badge mode-icon-emerald" aria-hidden="true">
-                <svg class="svg-icon" width="22" height="22"><use href="#icon-training"></use></svg>
-              </span>
-              <span class="mode-title">Treino Livre</span>
-            </span>
-            <span class="mode-desc">Pratique domínio, chutes e habilidades sem placar</span>
           </button>
         </div>
 
@@ -707,6 +693,147 @@
       </div>
     </section>
   </main>
+
+  <!-- Modal Nativo de Configuração de Partida (JOGAR -> Modo + Arena) -->
+  <dialog id="play-setup-dialog" class="cyber-dialog play-setup-dialog" closedby="any" aria-labelledby="play-setup-title">
+    <form id="play-setup-form" method="dialog" class="cyber-dialog-form">
+      <div class="cyber-dialog-head">
+        <div>
+          <span class="arcade-pill">Configuração da Arena</span>
+          <h2 id="play-setup-title" class="cyber-dialog-title">Escolha Modo e Estádio</h2>
+        </div>
+        <button id="play-setup-close-btn" type="button" class="hud-btn cyber-dialog-close" aria-label="Fechar janela">&times;</button>
+      </div>
+
+      <fieldset class="setup-fieldset">
+        <legend class="setup-legend">Modo de Jogo</legend>
+        <div class="play-mode-grid">
+          <label class="setup-mode-card">
+            <input type="radio" name="setup-game-mode" value="training" />
+            <span class="setup-mode-body">
+              <span class="mode-icon-badge mode-icon-emerald" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-training"></use></svg></span>
+              <strong>Treino Livre</strong>
+              <small>Sem placar · pratique chutes</small>
+            </span>
+          </label>
+          <label class="setup-mode-card">
+            <input type="radio" name="setup-game-mode" value="match" checked autofocus />
+            <span class="setup-mode-body">
+              <span class="mode-icon-badge" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duel-1v1"></use></svg></span>
+              <strong>1v1 Clássico</strong>
+              <small>Duelo direto · 3 min ou 5 gols</small>
+            </span>
+          </label>
+          <label class="setup-mode-card">
+            <input type="radio" name="setup-game-mode" value="2v2" />
+            <span class="setup-mode-body">
+              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+              <strong>2v2 Duplas</strong>
+              <small>Arena ampla · tabelas e passes</small>
+            </span>
+          </label>
+          <label class="setup-mode-card">
+            <input type="radio" name="setup-game-mode" value="3v3" />
+            <span class="setup-mode-body">
+              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+              <strong>3v3 Trios</strong>
+              <small>Campo expandido · fixo e alas</small>
+            </span>
+          </label>
+          <label class="setup-mode-card">
+            <input type="radio" name="setup-game-mode" value="4v4" />
+            <span class="setup-mode-body">
+              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+              <strong>4v4 Tático</strong>
+              <small>Formação com pivô, alas e fixo</small>
+            </span>
+          </label>
+          <label class="setup-mode-card">
+            <input type="radio" name="setup-game-mode" value="5v5" />
+            <span class="setup-mode-body">
+              <span class="mode-icon-badge mode-icon-cyan" aria-hidden="true"><svg class="svg-icon" width="20" height="20"><use href="#icon-duo-2v2"></use></svg></span>
+              <strong>5v5 Completo</strong>
+              <small>Arena máxima · goleiro-linha ativo</small>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="setup-fieldset">
+        <legend class="setup-legend">Estádio / Tema do Campo</legend>
+        <div class="pitch-choice-grid" role="radiogroup" aria-label="Tema do campo">
+          <label class="pitch-choice-card">
+            <input type="radio" name="pitch-theme" value="classic" checked />
+            <span class="pitch-mini-preview pitch-preview-classic" aria-hidden="true"><span class="pitch-mini-line"></span><span class="pitch-mini-circle"></span></span>
+            <span class="pitch-choice-text"><strong>Campo Clássico</strong><small>Grama verde natural</small></span>
+          </label>
+          <label class="pitch-choice-card">
+            <input type="radio" name="pitch-theme" value="futsal" />
+            <span class="pitch-mini-preview pitch-preview-futsal" aria-hidden="true"><span class="pitch-mini-line"></span><span class="pitch-mini-circle"></span></span>
+            <span class="pitch-choice-text"><strong>Quadra de Futsal</strong><small>Piso amadeirado &amp; área D</small></span>
+          </label>
+          <label class="pitch-choice-card">
+            <input type="radio" name="pitch-theme" value="cyber" />
+            <span class="pitch-mini-preview pitch-preview-cyber" aria-hidden="true"><span class="pitch-mini-line"></span><span class="pitch-mini-circle"></span></span>
+            <span class="pitch-choice-text"><strong>Arena Futurista</strong><small>Neon ciano &amp; grade tática</small></span>
+          </label>
+          <label class="pitch-choice-card">
+            <input type="radio" name="pitch-theme" value="jurassic" />
+            <span class="pitch-mini-preview pitch-preview-jurassic" aria-hidden="true"><span class="pitch-mini-line"></span><span class="pitch-mini-circle"></span></span>
+            <span class="pitch-choice-text"><strong>Arena Jurássica</strong><small>Fóssil T-Rex &amp; bordas âmbar</small></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="cyber-dialog-actions">
+        <button id="play-setup-cancel-btn" type="button" class="secondary-btn cyber-btn">Cancelar</button>
+        <button id="play-setup-confirm-btn" type="submit" value="confirm" class="primary-btn cyber-btn">
+          <span class="btn-inline-label"><svg class="svg-icon" width="16" height="16" aria-hidden="true"><use href="#icon-play"></use></svg><span>Entrar na Arena</span></span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal Nativo de Primeiro Acesso: Configuração do Perfil de Atleta -->
+  <dialog id="profile-onboarding-dialog" class="cyber-dialog profile-onboarding-dialog" closedby="closerequest" aria-labelledby="onboarding-title">
+    <form id="onboarding-form" method="dialog" class="cyber-dialog-form">
+      <div class="cyber-dialog-head">
+        <div>
+          <span class="arcade-pill">Boas-vindas ao Litoball</span>
+          <h2 id="onboarding-title" class="cyber-dialog-title">Configure seu Perfil de Atleta</h2>
+          <p class="cyber-dialog-sub">Essas informações aparecem na sua Cartinha Oficial e nas comemorações de gol. Você pode editar tudo depois em Opções.</p>
+        </div>
+      </div>
+
+      <div class="profile-form-grid">
+        <div class="profile-field">
+          <label for="onboard-name">Nome no Card <span aria-hidden="true">*</span></label>
+          <input id="onboard-name" name="playerName" type="text" maxlength="14" required autocomplete="nickname" enterkeyhint="next" autofocus value="Lito" />
+        </div>
+
+        <div class="profile-field">
+          <label for="onboard-nationality">Nacionalidade</label>
+          <select id="onboard-nationality" name="nationality"></select>
+        </div>
+
+        <fieldset class="setup-fieldset profile-full-span">
+          <legend class="setup-legend">Posição em Campo</legend>
+          <div id="onboard-position-group" class="position-radio-row"></div>
+        </fieldset>
+
+        <fieldset class="setup-fieldset profile-full-span">
+          <legend class="setup-legend">Foto de Perfil (desbloqueadas)</legend>
+          <div id="onboard-avatar-group" class="avatar-picker-grid"></div>
+          <small class="profile-picker-hint">Compre mais fotos exclusivas na Loja em "Fotos de Perfil".</small>
+        </fieldset>
+      </div>
+
+      <div class="cyber-dialog-actions">
+        <button id="onboarding-skip-btn" type="button" class="secondary-btn cyber-btn">Configurar depois</button>
+        <button id="onboarding-save-btn" type="submit" value="save" class="primary-btn cyber-btn">Salvar Perfil</button>
+      </div>
+    </form>
+  </dialog>
   </div>
 
 </body>

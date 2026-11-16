@@ -69,7 +69,8 @@ assets.loadSprite('snakeAiku', 'img/cobra do aiku.png').then(image => {
 }).catch(() => {});
 
 function getSnakeOpponents(actor) {
-  if (actor === player1 || actor === homeMate) {
+  if (typeof getOpponentsOf === 'function') return getOpponentsOf(actor);
+  if (actor === player1 || actor?.isHuman || actor?.isTeammate) {
     return gameMode === '2v2' ? [player2, awayMate] : [player2];
   }
   return gameMode === '2v2' ? [player1, homeMate] : [player1];
@@ -115,7 +116,7 @@ function findSnakeTackleTarget(actor) {
 }
 
 function canUseSnakeTackle(actor) {
-  if (!['match', '2v2', 'training'].includes(gameMode)) {
+  if (!['match', '2v2', '3v3', '4v4', '5v5', 'training'].includes(gameMode)) {
     return { ok: false, reason: 'Modo inválido para o Bote da Serpente' };
   }
 

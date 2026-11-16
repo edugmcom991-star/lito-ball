@@ -206,6 +206,33 @@ const Sound = {
     } catch (e) {}
   },
 
+  playCannon() {
+    try {
+      this.playAsset('cannon', this.playCannonSynth);
+    } catch (e) {
+      this.playCannonSynth();
+    }
+  },
+
+  playWebSnap() {
+    this.playNoiseBurst(0.16, 'highpass', 3200, 1400, 0.24);
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(640, now);
+      osc.frequency.exponentialRampToValueAtTime(190, now + 0.14);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.004, now + 0.16);
+      osc.connect(gain);
+      gain.connect(this.masterGain || this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.17);
+    } catch (e) {}
+  },
+
   playSnakeStrike() {
     this.playNoiseBurst(0.24, 'bandpass', 3600, 420, 0.32);
     if (!this.ctx) return;
